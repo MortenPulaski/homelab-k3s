@@ -1,8 +1,5 @@
 # Homelab: k3s auf Proxmox mit OpenTofu (IaC)
 
-> Kurzbeschreibung in 2-3 Sätzen: Was ist das, wofür gebaut, was zeigt es.
-> (Deine Worte – das ist der erste Absatz, den ein Recruiter liest.)
-
 Ein reproduzierbares Homelab-Setup: OpenTofu provisioniert Debian-VMs auf
 Proxmox VE, darauf läuft ein k3s-Cluster, auf dem Dienste deklarativ (GitOps)
 ausgerollt werden. Fokus: Infrastructure as Code, saubere Secrets, CI/CD,

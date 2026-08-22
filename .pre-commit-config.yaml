@@ -1,0 +1,24 @@
+# Lokale Schutzschicht: laeuft bei jedem `git commit`.
+# Einrichtung:  pre-commit install  &&  pre-commit autoupdate
+# Die rev-Werte aktualisiert `pre-commit autoupdate` auf die neuesten Tags.
+
+repos:
+  # --- Secret-Scanning: blockt Commits mit Token-/Key-Mustern -----------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+
+  # --- Basis-Hygiene ----------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-added-large-files
+
+  # HINWEIS (Schritt 2 - Tooling): sobald tofu installiert ist, ergaenzen wir
+  # hier einen tofu-fmt/validate-Hook. Bewusst noch nicht aktiviert, damit
+  # Schritt 1 ohne installiertes tofu durchlaeuft.

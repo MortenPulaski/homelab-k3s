@@ -60,6 +60,17 @@ gh --version
 > `deb` → `Types`, URL → `URIs`, `stable` → `Suites`, `main` → `Components`,
 > `[signed-by=…]` → `Signed-By`.
 
+### Anmeldung (SSH)
+
+```bash
+gh auth login   # GitHub.com  ->  SSH  ->  vorhandenen Key nutzen
+```
+
+Zwei getrennte Ebenen, die hier zusammenkommen: `gh` gegenüber der GitHub-API
+(um z. B. ein Repo anzulegen) und der SSH-Key gegenüber Git (um zu pushen).
+`gh auth login` mit SSH-Protokoll verdrahtet beides in einem Schritt.
+
+
 ## OpenTofu via mise
 
 Werkzeugversionen sind über [mise](https://mise.jdx.dev) gepinnt (`mise.toml`),
@@ -83,16 +94,6 @@ tofu version             # Kontrolle
 
 Beim ersten Betreten nach dem Klonen fragt mise nach Vertrauen: `mise trust`.
 
-
-### Anmeldung (SSH)
-
-```bash
-gh auth login   # GitHub.com  ->  SSH  ->  vorhandenen Key nutzen
-```
-
-Zwei getrennte Ebenen, die hier zusammenkommen: `gh` gegenüber der GitHub-API
-(um z. B. ein Repo anzulegen) und der SSH-Key gegenüber Git (um zu pushen).
-`gh auth login` mit SSH-Protokoll verdrahtet beides in einem Schritt.
 
 ---
 

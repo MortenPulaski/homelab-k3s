@@ -22,7 +22,7 @@ arbeiten. Getestet auf **Ubuntu 26.04**.
 - **Offizielle GitHub-apt-Quelle:** aktuelle Version, Updates über das normale
   `apt upgrade`, keine Sandbox. Eine Quelle, funktioniert auf 26.04 unverändert.
 
-### Installation (Ubuntu 24.04+/26.04, DEB822-Stil)
+### Installation (Ubuntu 26.04, DEB822-Stil)
 
 Signaturschlüssel nach `/etc/apt/keyrings/` ablegen (der vorgesehene Ort für
 manuell hinzugefügte Drittanbieter-Keys):
@@ -59,6 +59,30 @@ gh --version
 > Feldzuordnung alt → DEB822, falls du eine `.list`-Anleitung übersetzen musst:
 > `deb` → `Types`, URL → `URIs`, `stable` → `Suites`, `main` → `Components`,
 > `[signed-by=…]` → `Signed-By`.
+
+## OpenTofu via mise
+
+Werkzeugversionen sind über [mise](https://mise.jdx.dev) gepinnt (`mise.toml`),
+damit lokal und in CI exakt dieselbe Version läuft.
+
+### mise installieren (Ubuntu 26.04)
+
+```bash
+sudo add-apt-repository -y ppa:jdxcode/mise
+sudo apt update
+sudo apt install -y mise
+```
+### Aktivieren und Tools holen
+
+```bash
+echo 'eval "$(mise activate bash)"' >> ~/.bashrc && source ~/.bashrc
+mise use -g usage        # Tab-Vervollständigung (optional)
+mise install             # installiert die in mise.toml gepinnten Versionen
+tofu version             # Kontrolle
+```
+
+Beim ersten Betreten nach dem Klonen fragt mise nach Vertrauen: `mise trust`.
+
 
 ### Anmeldung (SSH)
 

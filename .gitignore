@@ -1,0 +1,41 @@
+# === OpenTofu / Terraform =====================================================
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# === Secrets - NIEMALS committen ==============================================
+# tfvars mit Werten (nur *.example wird eingecheckt)
+*.tfvars
+!*.tfvars.example
+*.auto.tfvars
+secrets.auto.tfvars
+
+# SOPS: die ENTSCHLUESSELTEN Klartext-Dateien (die *.enc.* / *.sops.* bleiben drin)
+*.dec
+*.decrypted
+*.plaintext
+
+# age / SSH private keys
+*.agekey
+age.key
+key.txt
+*.pem
+id_rsa
+id_ed25519
+
+# kubeconfig (enthaelt Cluster-Credentials)
+kubeconfig
+*.kubeconfig
+.kube/
+
+# === Kram =====================================================================
+.DS_Store
+*.swp
+*~

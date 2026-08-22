@@ -95,6 +95,39 @@ tofu version             # Kontrolle
 Beim ersten Betreten nach dem Klonen fragt mise nach Vertrauen: `mise trust`.
 
 
+## Secrets: SOPS + age
+
+Geheimnisse werden mit [SOPS](https://github.com/getsops/sops) verschlüsselt
+(nur die Werte, nicht die Struktur), Krypto-Backend ist [age](https://age-encryption.org).
+`sops` und `age` sind über mise gepinnt.
+
+### Werkzeuge
+
+```bash
+mise use sops@3.12.0 age@1.2.1    # Versionen aus `mise ls-remote <tool>` wählen
+```
+
+### age-Schlüsselpaar erzeugen
+
+```bash
+mkdir -p ~/.config/sops/age
+age-keygen -o ~/.config/sops/age/keys.txt   # SOPS findet diesen Pfad automatisch
+chmod 600 ~/.config/sops/age/keys.txt
+```
+
+`age-keygen` gibt den **öffentlichen** Schlüssel aus (`age1…`); jederzeit erneut
+abrufbar mit `age-keygen -y ~/.config/sops/age/keys.txt`. Er gehört in die
+`.sops.yaml` (siehe Repo-Wurzel).
+
+> **Privater Schlüssel** (`~/.config/sops/age/keys.txt`): nie ins Repo, außerhalb
+> der Maschine sichern (Passwortmanager). Verlust = Secrets unwiderruflich weg.
+
+### Secret bearbeiten
+
+```bash
+sops edit pfad/zur/datei.sops.yaml   # entschlüsselt zum Editieren, verschlüsselt beim Speichern
+```
+
 ---
 
 ## Weitere Werkzeuge

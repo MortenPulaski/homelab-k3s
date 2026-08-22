@@ -35,5 +35,6 @@ Wichtige Entscheidungen sind als ADRs unter [`docs/adr/`](docs/adr/) dokumentier
 
 - `.gitignore` schützt State, tfvars und Keys; **erster Commit** des Repos.
 - `pre-commit` + `gitleaks` blocken versehentliche Secrets lokal.
+- Secrets liegen SOPS-verschlüsselt im Repo, entschlüsselt wird mit age
 - GitHub Secret Scanning + Push Protection als serverseitige zweite Ebene.
 - State ist verschlüsselt (OpenTofu State Encryption) und liegt nie im Repo.

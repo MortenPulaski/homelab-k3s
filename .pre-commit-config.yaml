@@ -19,6 +19,9 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
-  # HINWEIS (Schritt 2 - Tooling): sobald tofu installiert ist, ergaenzen wir
-  # hier einen tofu-fmt/validate-Hook. Bewusst noch nicht aktiviert, damit
-  # Schritt 1 ohne installiertes tofu durchlaeuft.
+  # --- OpenTofu: Formatierung & Validierung -----------------------------------
+  - repo: https://github.com/tofuutils/pre-commit-opentofu
+    rev: v2.4.2
+    hooks:
+      - id: tofu_fmt
+      - id: tofu_validate

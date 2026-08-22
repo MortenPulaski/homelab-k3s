@@ -1,6 +1,6 @@
 # ADR-0002: Remote-State auf MinIO (S3-kompatibel)
 
-- **Status:** akzeptiert
+- **Status** ersetzt durch ADR-0006
 - **Datum:** 2026-08-22
 
 ## Kontext

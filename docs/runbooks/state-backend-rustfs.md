@@ -50,8 +50,13 @@ Wie das OpenTofu-State-Backend aufgesetzt und betrieben wird.
   `/etc/default/rustfs` auf dem LXC – **nie** im Repo. Access-Key
   großbuchstaben-alphanumerisch (kein rohes Base64 wegen `/`-Kollision mit
   SigV4).
-- **Dedizierter Tofu-Access-Key:** _TODO (4.3)_ – separater Key, nicht die
-  Root-Credentials; SOPS-verschlüsselt abgelegt (_TODO 4.4_).
+- **Dedizierter Tofu-Access-Key:** least-privilege, nur auf Bucket `tofu-state`
+  (`GetObject`/`PutObject`/`DeleteObject` auf `…/*`, `ListBucket` auf den Bucket).
+  Nicht die Root-Credentials. Widerruf-/Rotation über die RustFS-Konsole.
+- **Ablage:** SOPS-verschlüsselt in `infra/live/homelab/secrets.sops.yaml` als
+  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. mise lädt und entschlüsselt sie
+  beim Betreten des Projekts automatisch (age-Schlüssel via `SOPS_AGE_KEY_FILE`).
+
 
 ## Bucket & Versioning
 

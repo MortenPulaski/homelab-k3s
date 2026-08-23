@@ -24,10 +24,9 @@ Wie das OpenTofu-State-Backend aufgesetzt und betrieben wird.
   als Upstream darauf zeigt).
 - **TLS-Terminierung:** über NPM (Nginx Proxy Manager), nicht in RustFS selbst.
 - **Proxy-Host (S3-API):** `s3.marpal-it.de` → `http://192.168.0.68:9000`
-  - Let's-Encrypt-Zertifikat, „Force SSL" an.
-  - **Access-List:** nur LAN/Netbird – das Backend hält Infra-Secrets und ist
-    **nicht** öffentlich erreichbar (der Name darf öffentlich auflösen, der
-    Zugriff nicht).
+  - Let's-Encrypt-Zertifikat via DNS-01-Challenge, „Force SSL" an.
+  - Split-Horizon-DNS (AdGuard Home): `s3.marpal-it.de` löst nur im lokalen
+    Netzwerk auf.
   - Advanced-Direktiven (sonst scheitern signierte S3-Anfragen):
     ```nginx
     ignore_invalid_headers off;
@@ -37,7 +36,7 @@ Wie das OpenTofu-State-Backend aufgesetzt und betrieben wird.
     proxy_set_header Host $http_host;
     ```
 - **Konsole (optional):** eigener Proxy-Host `rustfs.marpal-it.de` →
-  `http://192.168.0.68:9001`, ebenfalls mit Access-List.
+  `http://192.168.0.68:9001`, ebenfalls nur intern auflösbar (Split-Horizon-DNS).
 - **Tofu-Endpoint:** `https://s3.marpal-it.de` (echtes Zertifikat → kein
   `custom_ca_bundle` in Tofu nötig).
 

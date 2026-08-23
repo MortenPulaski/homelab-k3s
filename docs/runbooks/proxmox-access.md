@@ -13,6 +13,13 @@ Wie der API-Zugriff für OpenTofu auf Proxmox VE eingerichtet ist.
 - **Token-ID:** `provider` (ohne Privilege Separation, `--privsep 0` – Token
   erbt die Rechte des Users statt eigener, separater Rechte)
 
+## Netzwerk
+
+- **Proxy-Host (NPM):** `pve2.marpal-it.de` → `http://<proxmox-ip>:8006`
+  - Let's-Encrypt-Zertifikat via DNS-01-Challenge.
+  - Split-Horizon-DNS (AdGuard Home): `pve2.marpal-it.de` löst nur im
+    lokalen Netzwerk auf.
+
 ## Hinweis: `VM.Monitor` in PVE 9
 
 Seit Proxmox VE 9.0 ist das Privileg `VM.Monitor` entfernt (ersetzt durch
@@ -58,7 +65,28 @@ SOPS-verschlüsselt in `infra/live/homelab/secrets.sops.yaml` als
 erwartet). mise lädt und entschlüsselt automatisch beim Betreten des Projekts
 (gleiches Muster wie die RustFS-S3-Credentials).
 
-## Verifikation
+## Provider-Konfiguration (Tofu)
+
+Konfiguriert in `infra/live/homelab/provider.tf`:
+
+- `endpoint = "https://pve2.marpal-it.de/"`
+- Provider `bpg/proxmox`, Version `0.111.1` (exakt gepinnt, kein Range –
+  konsistent zum mise-Pinning-Prinzip, siehe ADR-0004)
+- Kein `insecure = true` nötig (gültiges TLS-Zertifikat via NPM)
+- Auth über `PROXMOX_VE_API_TOKEN` aus `secrets.sops.yaml` (siehe Abschnitt
+  „Ablage" oben) – kein Token-Wert im Provider-Block selbst
+
+Verifiziert mit:
+
+```bash
+tofu init
+tofu plan
+```
+
+Erwartetes Ergebnis: `No changes. Your infrastructure matches the
+configuration.` (keine VM-Ressourcen definiert, reiner Auth-/Verbindungstest)
+
+## Verifikation (Proxmox-Rechte)
 
 ```bash
 pveum user permissions tofu@pve

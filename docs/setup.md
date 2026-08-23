@@ -3,8 +3,8 @@
 Werkzeuge, die auf der Arbeitsmaschine gebraucht werden, um mit diesem Repo zu
 arbeiten. Getestet auf **Ubuntu 26.04**.
 
-> Reproduzierbare Tool-Versionen (mise/asdf via `.tool-versions`) folgen in
-> Schritt 2. Dieses Dokument sammelt die einmalige Installation der Basis-CLIs.
+> Reproduzierbare Tool-Versionen sind über mise (`mise.toml`, siehe ADR-0004)
+> gepinnt. Dieses Dokument sammelt die einmalige Installation der Basis-CLIs.
 
 ## GitHub CLI (`gh`) — optional
 
@@ -104,7 +104,7 @@ Geheimnisse werden mit [SOPS](https://github.com/getsops/sops) verschlüsselt
 ### Werkzeuge
 
 ```bash
-mise use sops@3.12.0 age@1.2.1    # Versionen aus `mise ls-remote <tool>` wählen
+mise use sops@3.13.3 age@1.3.1    # Versionen aus `mise ls-remote <tool>` wählen
 ```
 
 ### age-Schlüsselpaar erzeugen
@@ -137,4 +137,4 @@ sops edit pfad/zur/datei.sops.yaml   # entschlüsselt zum Editieren, verschlüss
 
 ## Weitere Werkzeuge
 
-_Folgt in Schritt 2 (Tooling): OpenTofu, mise + `.tool-versions`, kubectl._
+_Folgt in Phase 3 (k3s-Cluster): kubectl._

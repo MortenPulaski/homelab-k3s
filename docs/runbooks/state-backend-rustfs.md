@@ -57,11 +57,10 @@ Wie das OpenTofu-State-Backend aufgesetzt und betrieben wird.
   `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`. mise lädt und entschlüsselt sie
   beim Betreten des Projekts automatisch (age-Schlüssel via `SOPS_AGE_KEY_FILE`).
 
-
 ## Bucket & Versioning
 
-- _TODO (4.3):_ Bucket `<name>` anlegen, **Versioning aktivieren**
-  (`rc version enable <alias>/<bucket>`).
+- Bucket `tofu-state`, **Versioning aktiviert**, Objektsperre **aus** (würde das
+  Überschreiben des State und der Lock-Dateien blockieren).
 
 ## Backend-Konfiguration (Tofu)
 
@@ -77,11 +76,8 @@ systemctl restart rustfs               # Neustart (z. B. nach Config-Änderung)
 journalctl -u rustfs -e                # Logs
 ```
 
-## Wiederherstellung
+## State wiederherstellen (Versioning)
 
-- Der LXC wird per `vzdump` gesichert (enthält RustFS-Binary, Config, Daten).
-- Der **State selbst** (Bucket-Inhalt) ist kritisch: Versioning schützt vor
-  versehentlichem Überschreiben; zusätzlich _TODO:_ separates Backup des Buckets
-  einrichten.
-- Geht der LXC verloren: aus `vzdump` wiederherstellen oder dieses Runbook neu
-  abarbeiten, dann State aus dem letzten Backup einspielen.
+Wird der State beschädigt, in der RustFS-Konsole am Objekt
+`homelab/terraform.tfstate` die Versionsliste öffnen und eine frühere Version
+wiederherstellen. Vorher immer die aktuelle Version sichern.

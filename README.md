@@ -5,11 +5,14 @@ Proxmox VE, darauf läuft ein k3s-Cluster, auf dem Dienste deklarativ (GitOps)
 ausgerollt werden. Fokus: Infrastructure as Code, saubere Secrets, CI/CD,
 Observability und Supply-Chain-Härtung.
 
+Aktueller Stand: siehe [`docs/STATUS.md`](docs/STATUS.md).
+
 ## Stack
 
 <!-- TODO: ausfüllen, während die Phasen wachsen -->
 - **IaC:** OpenTofu (Proxmox-Provider `bpg/proxmox`)
-- **State:** MinIO (S3-kompatibel), native Locking, verschlüsselt
+- **State-Backend:** RustFS (S3-kompatibel), Versioning, ohne natives Locking (Solo-Betrieb)
+- **State-Verschlüsselung:** OpenTofu State Encryption, PBKDF2, `enforced = true`
 - **Secrets:** SOPS + age
 - **Cluster:** k3s auf VMs
 - **GitOps / CI/CD / Observability:** _folgt_
@@ -33,7 +36,7 @@ Wichtige Entscheidungen sind als ADRs unter [`docs/adr/`](docs/adr/) dokumentier
 
 ## Sicherheit
 
-- `.gitignore` schützt State, tfvars und Keys; **erster Commit** des Repos.
+- `.gitignore` schützt State, tfvars und Keys.
 - `pre-commit` + `gitleaks` blocken versehentliche Secrets lokal.
 - Secrets liegen SOPS-verschlüsselt im Repo, entschlüsselt wird mit age
 - GitHub Secret Scanning + Push Protection als serverseitige zweite Ebene.

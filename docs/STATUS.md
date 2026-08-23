@@ -3,15 +3,15 @@
 **Stand:** 2026-08-23
 
 ## Phasenplan
-- [x] Phase 1 – Fundament & Setup (Git, Tooling, Secrets, State-Backend, Proxmox-Zugang) — abgeschlossen
-- [ ] Phase 2 – VMs via OpenTofu + cloud-init
-- [ ] Phase 3 – k3s-Cluster
-- [ ] Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager)
-- [ ] Phase 5 – GitOps (ArgoCD/Flux)
-- [ ] Phase 6 – CI/CD-Pipeline
-- [ ] Phase 7 – Observability (Prometheus/Grafana)
-- [ ] Phase 8 – Supply-Chain & Härtung (cosign, Kyverno)
-- [ ] Phase 9 – Portfolio-Finish & Zertifizierung
+- ✅ Phase 1 – Fundament & Setup (Git, Tooling, Secrets, State-Backend, Proxmox-Zugang) — abgeschlossen
+- Phase 2 – VMs via OpenTofu + cloud-init
+- Phase 3 – k3s-Cluster
+- Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager)
+- Phase 5 – GitOps (ArgoCD/Flux)
+- Phase 6 – CI/CD-Pipeline
+- Phase 7 – Observability (Prometheus/Grafana)
+- Phase 8 – Supply-Chain & Härtung (cosign, Kyverno)
+- Phase 9 – Portfolio-Finish & Zertifizierung
 
 ## Ziel
 k3s-Homelab auf Proxmox, vollständig als Infrastructure as Code (OpenTofu).

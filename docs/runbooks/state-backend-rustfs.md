@@ -37,7 +37,7 @@ Wie das OpenTofu-State-Backend aufgesetzt und betrieben wird.
     proxy_set_header Host $http_host;
     ```
 - **Konsole (optional):** eigener Proxy-Host `rustfs.marpal-it.de` →
-  `http://<LXC-IP>:9001`, ebenfalls mit Access-List.
+  `http://192.168.0.68:9001`, ebenfalls mit Access-List.
 - **Tofu-Endpoint:** `https://s3.marpal-it.de` (echtes Zertifikat → kein
   `custom_ca_bundle` in Tofu nötig).
 
@@ -64,9 +64,41 @@ Wie das OpenTofu-State-Backend aufgesetzt und betrieben wird.
 
 ## Backend-Konfiguration (Tofu)
 
-- _TODO (4.5):_ `backend "s3"`-Block in `infra/live/homelab/` mit Endpoint
-  `https://s3.<domain>`, Path-Style, `use_lockfile = false`, State-Encryption an;
-  Credentials via Umgebungsvariablen aus der SOPS-Datei.
+Konfiguriert in `infra/live/homelab/backend.tf`:
+
+- `bucket = "tofu-state"`, `key = "homelab/terraform.tfstate"`
+- `endpoints.s3 = "https://s3.marpal-it.de"` (Endpoint via NPM, echtes Zertifikat)
+- `use_path_style = true` (self-hosted S3, kein vhost-DNS)
+- `use_lockfile = false` (kein natives Locking – RustFS-Bug auf versionierten
+  Buckets + Solo-Betrieb; siehe ADR-0006)
+- `region = "us-east-1"` (Dummy – RustFS ist nicht AWS)
+- `skip_credentials_validation`, `skip_region_validation`,
+  `skip_requesting_account_id`, `skip_metadata_api_check` = `true`
+  (keine AWS-Dienste vorhanden)
+
+Credentials kommen **nicht** in den Block, sondern als `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY` aus der SOPS-Datei (von mise geladen).
+
+## State-Verschlüsselung (at rest)
+
+Konfiguriert in `infra/live/homelab/encryption.tf` (OpenTofu-eigene Encryption):
+
+- Key-Provider `pbkdf2` (passphrasenbasiert, kein externer KMS)
+- Methode `aes_gcm`, `enforced = true` (nur noch verschlüsselter State)
+- Passphrase via `TF_VAR_state_encryption_passphrase` aus der SOPS-Datei
+
+Damit ist der State **doppelt** geschützt: bei der Übertragung (TLS via NPM) und
+at rest im Bucket (`encrypted_data`-Block statt Klartext-JSON).
+
+> **Passphrase-Verlust = State unwiederbringlich.** Die Passphrase liegt
+> SOPS-verschlüsselt im Repo und zusätzlich im Passwortmanager. Auch die spätere
+> CI braucht `TF_VAR_state_encryption_passphrase` als Secret.
+
+### Migration (einmalig, erledigt)
+
+Bestehender Klartext-State wurde per temporärem `unencrypted`-Fallback gelesen
+und verschlüsselt zurückgeschrieben; danach Fallback entfernt und `enforced`
+gesetzt.
 
 ## Betrieb
 

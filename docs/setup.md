@@ -127,7 +127,11 @@ abrufbar mit `age-keygen -y ~/.config/sops/age/keys.txt`. Er gehört in die
 ```bash
 sops edit pfad/zur/datei.sops.yaml   # entschlüsselt zum Editieren, verschlüsselt beim Speichern
 ```
-export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt" in die Shell-RC – sonst findet mises eingebautes SOPS den age-Schlüssel nicht.
+
+> **mise + SOPS:** mises eingebautes SOPS sucht den age-Schlüssel unter
+> `~/.config/mise/age.txt`, nicht am Standard-SOPS-Pfad. Damit es (und das
+> `sops`-CLI) denselben Schlüssel nutzen, in die Shell-RC aufnehmen:
+> `export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"`.
 
 ---
 

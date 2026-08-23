@@ -16,7 +16,7 @@ Bogen an einem Ort lesbar macht.
 **Monorepo**, gegliedert **nach Ebene/Lebenszyklus** statt nach Anwendung:
 
 ```
-homelab-k3s/
+iac-homelab-k3s/
 ├── docs/            # README-nahe Doku, ADRs (docs/adr/)
 ├── infra/           # OpenTofu: Proxmox-VMs
 │   ├── modules/     # wiederverwendbare Bausteine

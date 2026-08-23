@@ -14,7 +14,7 @@ Aktueller Stand: siehe [`docs/STATUS.md`](docs/STATUS.md).
 - **State-Backend:** RustFS (S3-kompatibel), Versioning, ohne natives Locking (Solo-Betrieb)
 - **State-Verschlüsselung:** OpenTofu State Encryption, PBKDF2, `enforced = true`
 - **Secrets:** SOPS + age
-- **Cluster:** k3s auf VMs
+- **Cluster:** k3s HA (3 Server/embedded etcd + 2 Agents), kube-vip als API-Server-VIP
 - **GitOps / CI/CD / Observability:** _folgt_
 
 ## Architektur
@@ -41,3 +41,5 @@ Wichtige Entscheidungen sind als ADRs unter [`docs/adr/`](docs/adr/) dokumentier
 - Secrets liegen SOPS-verschlüsselt im Repo, entschlüsselt wird mit age
 - GitHub Secret Scanning + Push Protection als serverseitige zweite Ebene.
 - State ist verschlüsselt (OpenTofu State Encryption) und liegt nie im Repo.
+- Proxmox-Zugriff über dediziertes API-Token mit minimal-privilegierter
+  Rolle (kein Root-Zugriff für Terraform/OpenTofu).

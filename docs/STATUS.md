@@ -19,9 +19,18 @@ Zweck: Lernen & Portfolio für die DevOps-Jobsuche. Ich tippe alle Befehle
 selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklären.
 
 ## Umgebung (Eckdaten)
-- Proxmox-Host, Storage `lab`
+- Proxmox-Host `pve2` (i7-13700T, 64 GB RAM, ZFS-Storage), TLS via NPM
+  (`pve2.marpal-it.de`)
 - RustFS-State-Backend: LXC `8001`, IP `192.168.0.68`
 - Tofu-Endpoint: `https://s3.marpal-it.de` (TLS via NPM), Bucket `tofu-state`
+- Proxmox-API-Zugang: User `tofu@pve`, Rolle `TofuRole`, Provider
+  `bpg/proxmox` 0.111.1 (siehe `docs/runbooks/proxmox-access.md`)
+- k3s-IP-Plan (statisch via cloud-init, Phase 2):
+  - `192.168.0.160`–`162`: Server-Nodes (embedded etcd, HA)
+  - `192.168.0.163`–`164`: Agent-Nodes
+  - `192.168.0.170`: kube-vip (API-Server-VIP)
+  - `192.168.0.165`–`169`: Reserve
+  - Begründung/Trade-off: siehe ADR-0008
 - Arbeitsverzeichnis Tofu: `infra/live/homelab/`
 - Tooling gepinnt via mise (OpenTofu 1.12.6; Sops 3.13.3; age 1.3.1)
 

@@ -51,3 +51,43 @@ besonders zusammen mit Versioning:
 - **SeaweedFS:** funktional möglich, aber mehr bewegliche Teile als nötig.
 - **PostgreSQL-Backend:** echtes, robustes Locking (Advisory Locks), sehr einfach
   – aber verliert das S3-/AWS-Lernmuster. Für das Employability-Ziel verworfen.
+
+## Nachtrag (2026-08-24): Off-Host-State-Kandidaten für Phase 6
+
+Recherche-Notiz, **keine** Entscheidung. Kontext: Ab Phase 6 (CI/CD) brauchen
+flüchtige Runner ein erreichbares Remote-State-Backend, das **nicht** von `pve2`
+abhängt – der RustFS-LXC liegt auf `pve2`, was für CI ein Erreichbarkeits- und
+Schreibkonflikt-Risiko ist (siehe Konsequenz „Kein Remote-Lock"). Für diesen Fall
+wurden S3-kompatible Off-Host-Backends gesichtet.
+
+**Kosten-Fazit vorab:** Der Tofu-State ist winzig (wenige MB, seltene Änderung).
+Bei allen Kandidaten liegen die Kosten dafür bei **Cent-Beträgen oder null**
+(Rechenbeispiele: AWS S3 Frankfurt ~$0,004–0,12/Monat; Scaleway ~€0,0004–0,08/Monat).
+Der Preis ist damit **kein** Entscheidungskriterium – es zählen die qualitativen
+Achsen. Preisstand: 2026-08.
+
+Kandidaten nach Achse:
+
+- **Gratis + off-host:** Cloudflare R2 (10 GB Storage/Monat dauerhaft frei,
+  Zero-Egress, natives S3) oder Oracle Cloud Object Storage (Always Free, Konto
+  bereits vorhanden). Beide US-Recht (CLOUD Act).
+- **Maximaler Lerneffekt:** AWS S3 (industrieübliches `backend "s3"`, dazu
+  IAM/KMS/CloudTrail als eigenständiger Portfolio-Wert). Achtung: neues
+  Free-Tier-Modell (seit 15.07.2025) = $100–200 Guthaben / 6 Monate, danach
+  Account-Schließung. Fürs *dauerhafte* Backend zwingend Paid-Plan; als
+  *befristete Lernübung* im Guthaben-Fenster faktisch $0. Egress im Maßstab teuer
+  (100 GB/Monat frei, dann $0,09/GB) – für einen State irrelevant.
+- **EU-Datenhoheit:** IONOS Object Storage (deutsch, ISO-27001/DSGVO, kein CLOUD
+  Act; Versioning via Object Lock/WORM; **kein** Free-Tier, Angebot nur für
+  Gewerbetreibende) oder Scaleway (französisch, Multi-Region PAR/AMS/WAW;
+  Versioning; 75 GB Egress/Monat frei + 3-Monats-Storage-Trial).
+
+**Verworfen:** Hetzner Object Storage – trotz gutem Preis und EU-Standort **kein
+Objekt-Versioning** → als State-Backend (Recovery-Netz) ungeeignet.
+
+Offene technische Frage vor CI-Einsatz: Ob der jeweilige Anbieter
+S3-Conditional-Writes (`If-None-Match`) für `use_lockfile` robust umsetzt, ist pro
+Kandidat in der S3-API-Doku zu verifizieren, bevor CI-Locking darauf aufgebaut wird
+(self-hosted RustFS tut es aktuell nicht, daher `use_lockfile = false`).
+
+Entscheidung bleibt bewusst **offen bis Phase 6**.

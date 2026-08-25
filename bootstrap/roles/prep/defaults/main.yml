@@ -1,0 +1,6 @@
+---
+prep_timezone: "Europe/Berlin"   # bei Bedarf hier ändern
+prep_packages:
+  - qemu-guest-agent
+  - btop
+  - curl

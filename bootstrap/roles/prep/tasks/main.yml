@@ -1,0 +1,48 @@
+---
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install base packages (guest agent, hygiene tools)
+  ansible.builtin.apt:
+    name: "{{ prep_packages }}"
+    state: present
+
+# qemu-guest-agent: nur installieren (via prep_packages), NICHT starten.
+# Die Unit ist per BindsTo an das virtio-serial-Device gebunden und startet
+# automatisch, sobald Tofu den Agent-Kanal aktiviert (agent.enabled = true)
+# und die VM einen vollen Power-Cycle hatte. Siehe ADR-0009 / Schritt 3b.
+
+- name: Set system timezone
+  community.general.timezone:
+    name: "{{ prep_timezone }}"
+
+- name: Install systemd-timesyncd for time synchronization
+  ansible.builtin.apt:
+    name: systemd-timesyncd
+    state: present
+
+- name: Enable and start systemd-timesyncd
+  ansible.builtin.systemd_service:
+    name: systemd-timesyncd
+    enabled: true
+    state: started
+
+- name: Check for active swap
+  ansible.builtin.command: swapon --noheadings
+  register: prep_swap
+  changed_when: false
+  failed_when: false
+
+- name: Disable swap at runtime (only if present)
+  ansible.builtin.command: swapoff -a
+  when: prep_swap.stdout | length > 0
+  changed_when: true
+
+- name: Comment out swap entries in /etc/fstab (only if present)
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s.*)$'
+    replace: '# \1'
+  when: prep_swap.stdout | length > 0

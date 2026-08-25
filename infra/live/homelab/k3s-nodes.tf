@@ -24,6 +24,7 @@ module "k3s_nodes" {
 
   image_id       = proxmox_download_file.debian13.id
   ssh_public_key = trimspace(data.local_file.ssh_pub.content)
+  agent_enabled  = var.agent_enabled
 }
 
 # Sicherer State-Umzug: server-1 wechselt nur die Adresse, wird NICHT neu gebaut

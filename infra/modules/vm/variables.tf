@@ -6,6 +6,11 @@ variable "ip_address" {
   type        = string
   description = "CIDR, z. B. 192.168.0.160/24"
 }
+variable "agent_enabled" {
+  description = "QEMU-Guest-Agent-Kanal. Erst true, nachdem Ansible den Agent installiert hat (zweistufiger Bring-up, ADR-0009)."
+  type        = bool
+  default     = false # sicherer Default fürs Erst-Deployment
+}
 
 # von der Live-Ebene durchgereicht (Modul greift nicht selbst ins Dateisystem)
 variable "image_id" { type = string }

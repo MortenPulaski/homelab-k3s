@@ -65,8 +65,45 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
     └── .pre-commit-config.yaml
 
 ## Offen
-- Phase 2: k3s-VMs via OpenTofu + cloud-init (setzt den in ADR-0008 und
-  „Umgebung" festgelegten IP-Plan technisch um)
+
+- **Foundation-Projekt (Backlog, nach Phase 2):** RustFS-LXC + Proxmox-Zugang
+  (`tofu@pve`) als eigenes, getrenntes Tofu-Projekt `foundation/` codifizieren
+  (Bootstrap-Stack-Muster, eigener lokaler PBKDF2-State, gitignored, Backup
+  im Passwortmanager – kein Zirkelbezug zu ADR-0006).
+
+  **Vorab-Check (5 Min., potenzieller Blocker):** `pct config 8001` prüfen –
+  `unprivileged` und `features`. Feature-Flags außer `nesting` lassen sich
+  nur als root@pam ändern; ändert die Ausgangslage für den ganzen Plan.
+
+  **RustFS-LXC:** Import. Risiko: erster `plan` kann `forces replacement`
+  zeigen (nicht importierbare Pflichtattribute wie
+  `operating_system.template_file_id`, `initialization`). Protokoll:
+  ZFS-Snapshot → `tofu state pull` sichern → importieren → `plan` prüfen →
+  jedes `forces replacement` = Stopp, HCL angleichen oder `ignore_changes`.
+  Fertig erst bei `No changes`.
+
+  **`tofu@pve`/`TofuRole`/Token:** Neuanlage nötig (Token-Secret beim Import
+  nicht abrufbar). Cutover-Reihenfolge: neues Token erzeugen → SOPS in
+  `infra/live/homelab/secrets.sops.yaml` aktualisieren → `tofu plan` im
+  Homelab-Projekt verifizieren → erst dann altes Token löschen. Reihenfolge
+  zwingend einhalten, sonst Aussperrung aus dem Hauptprojekt.
+
+  **Auth-Henne-Ei:** Kein fein zugeschnittenes Custom-Bootstrap-Token
+  (Over-Engineering für eine Identität, die Minuten lebt – Provider-Doku
+  kennt zudem Fälle, wo privilegierte Operationen selbst mit
+  Administrator-Rolle per API-Token scheitern). Stattdessen: **ephemeres
+  root@pam-Token**, vor dem Lauf erzeugt, danach gelöscht. Sicherheitsmerkmal
+  ist die Kurzlebigkeit, nicht der Privilegienzuschnitt.
+
+  **Scope-Grenze:** Codifiziert wird nur die Container-Hülle, nicht der
+  RustFS-Dienst selbst (Installation, TLS, Bucket, S3-Key bleiben Runbook).
+  NPM, DNS und Proxmox-Host-Konfig bleiben ebenfalls außen vor.
+
+  **Aufwand:** ~5–7 Std. inkl. eigenem ADR (LXC-Import mit
+  Sicherheits-Protokoll: 3–4 Std.; Proxmox-IAM-Teil: 2–3 Std.).
+
+  Bewusst zurückgestellt: Phase 2 hat Priorität (erste echte VM vor
+  vierter Fundament-Aufgabe).
 
 ## Kontext / Details
 - Entscheidungen: `docs/adr/0001`–`0008` (0002 ersetzt durch 0006)

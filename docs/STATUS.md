@@ -5,7 +5,7 @@
 ## Phasenplan
 - ✅ Phase 1 – Fundament & Setup (Git, Tooling, Secrets, State-Backend, Proxmox-Zugang) — abgeschlossen
 - ✅ Phase 2 – VMs via OpenTofu + cloud-init (Debian-Image, VM-Modul, 5-Node-Cluster) — abgeschlossen
-- Phase 3 – k3s-Cluster
+- 🔄 Phase 3 – k3s-Cluster — in Arbeit (Node-Prep + Guest-Agent erledigt; k3s-Install als Nächstes)
 - Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager)
 - Phase 5 – GitOps (ArgoCD/Flux)
 - Phase 6 – CI/CD-Pipeline
@@ -36,8 +36,11 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   - `192.168.0.170`: kube-vip (API-Server-VIP, Phase 3)
   - `192.168.0.165`–`169`: Reserve
   - Begründung/Trade-off: siehe ADR-0008
+- cloud-init-User auf den Nodes: `ops` (NOPASSWD-sudo)
 - Arbeitsverzeichnis Tofu: `infra/live/homelab/`
-- Tooling gepinnt via mise (OpenTofu 1.12.6; Sops 3.13.3; age 1.3.1)
+- Arbeitsverzeichnis Ansible: `bootstrap/`
+- Tooling gepinnt via mise (OpenTofu 1.12.6; Sops 3.13.3; age 1.3.1;
+  Ansible 14.3.1; pipx 1.16.7). kubectl folgt zu Beginn des k3s-Installs.
 
 ## Erledigt (Phase 1, Schritte 1–5)
 - Git-Fundament: öffentliches GitHub-Repo, gitleaks + Push Protection
@@ -69,6 +72,38 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
 - `.gitignore` gehärtet: modul-lokale `.terraform.lock.hcl` ignoriert, die
   Root-Lockfile bleibt bewusst versioniert (Provider-Pinning, ADR-0004)
 
+## Erledigt (Phase 3 – bisher)
+- Ansible-Tooling gepinnt: `ansible` 14.3.1 (pipx-Backend, `--include-deps`)
+  + `pipx` 1.16.7 (aqua) in `mise.toml`. Pin-Politik als ADR-0004-Nachtrag
+  festgehalten: ergebnis-bestimmende Tools exakt pinnen, Komfort-Tools
+  (`github-cli`) dürfen `latest` sein
+- `bootstrap/`-Fundament: `ansible.cfg` (become via NOPASSWD-sudo als `ops`,
+  host key checking an, YAML-Ausgabe über den built-in default-Callback +
+  `callback_result_format`), YAML-Inventory (Gruppen `k3s_servers` /
+  `k3s_agents` nach ADR-0008); Connectivity mit `ansible all -m ping`
+  verifiziert
+- `prep`-Rolle (Phase 3a): installiert `qemu-guest-agent`, `btop`, `curl`;
+  Zeitzone `Europe/Berlin`; `systemd-timesyncd` für Zeitsync; Swap-Deaktivierung
+  nur falls vorhanden (Cloud-Image hat keinen → Tasks skippen). Idempotent auf
+  allen 5 Nodes verifiziert (`changed=0` im zweiten Lauf). qemu-guest-agent
+  wird von Ansible NICHT gestartet: die Unit ist `BindsTo` das virtio-serial-
+  Device und startet selbst, sobald der Kanal da ist
+- Guest-Agent-Kanal aktiviert (Phase 3b): `agent_enabled` als Root-Variable
+  (`live`-Default true) → Modul-Variable (Default false) → `agent { enabled }`.
+  In-place-Flip false→true auf allen 5 Nodes; Provider rebootet selbst
+  (`reboot_after_update`). Agent aktiv, Proxmox meldet die Node-IPs. Zweistufiger
+  Bring-up dokumentiert im ADR-0009-Nachtrag (belegt via dpkg.log: das
+  genericcloud-Image bringt qemu-guest-agent nicht mit)
+
+## Nächster Schritt (Phase 3 – k3s-Install)
+Entscheidungen zuerst, dann Befehle:
+- k3s-Version festlegen und pinnen (aktuelle stable prüfen)
+- kubectl in `mise.toml` pinnen (Version-Skew zur k3s-Version)
+- erster Server mit `--cluster-init` (embedded etcd), dann Server 2/3 + Agents
+- Cluster-Token als SOPS-Secret
+- kube-vip als API-Server-VIP (`192.168.0.170`, ARP-Modus)
+- eigenes Ansible-Playbook (Weg A) → am Ende ADR-0010 (Config-Management)
+
 ## Repo-Struktur
 
     .
@@ -83,7 +118,13 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
     │   └── live/homelab/  # konkrete Umgebung: backend.tf, encryption.tf,
     │                      #   variables.tf, provider.tf, image.tf,
     │                      #   k3s-nodes.tf, secrets.sops.yaml (verschlüsselt)
-    ├── bootstrap/         # k3s-Installation via Ansible (Phase 3, noch leer)
+    ├── bootstrap/         # k3s-Installation via Ansible
+    │   ├── ansible.cfg
+    │   ├── inventory/hosts.yml
+    │   ├── group_vars/    # all.yml (Platzhalter, füllt sich im k3s-Install)
+    │   ├── roles/
+    │   │   └── prep/      # Node-Vorbereitung (Phase 3a)
+    │   └── site.yml       # Haupt-Playbook
     ├── cluster/           # k8s-/GitOps-Manifeste (Phase 5, noch leer)
     ├── mise.toml          # Tool-Versionen gepinnt
     ├── .sops.yaml         # SOPS-Regeln (öffentl. age-Key)
@@ -94,7 +135,8 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
 - **Foundation-Projekt (Backlog):** RustFS-LXC + Proxmox-Zugang
   (`tofu@pve`) als eigenes, getrenntes Tofu-Projekt `foundation/` codifizieren
   (Bootstrap-Stack-Muster, eigener lokaler PBKDF2-State, gitignored, Backup
-  im Passwortmanager – kein Zirkelbezug zu ADR-0006).
+  im Passwortmanager – kein Zirkelbezug zu ADR-0006). Details/Protokoll unten.
+  Priorität gegenüber Phase 3 offen gelassen; Phase 3 wurde zuerst gestartet.
 
   **Vorab-Check (5 Min., potenzieller Blocker):** `pct config 8001` prüfen –
   `unprivileged` und `features`. Feature-Flags außer `nesting` lassen sich
@@ -113,25 +155,22 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   Homelab-Projekt verifizieren → erst dann altes Token löschen. Reihenfolge
   zwingend einhalten, sonst Aussperrung aus dem Hauptprojekt.
 
-  **Auth-Henne-Ei:** Kein fein zugeschnittenes Custom-Bootstrap-Token
-  (Over-Engineering für eine Identität, die Minuten lebt – Provider-Doku
-  kennt zudem Fälle, wo privilegierte Operationen selbst mit
-  Administrator-Rolle per API-Token scheitern). Stattdessen: **ephemeres
-  root@pam-Token**, vor dem Lauf erzeugt, danach gelöscht. Sicherheitsmerkmal
-  ist die Kurzlebigkeit, nicht der Privilegienzuschnitt.
+  **Auth-Henne-Ei:** ephemeres root@pam-Token, vor dem Lauf erzeugt, danach
+  gelöscht. Sicherheitsmerkmal ist die Kurzlebigkeit, nicht der
+  Privilegienzuschnitt.
 
   **Scope-Grenze:** Codifiziert wird nur die Container-Hülle, nicht der
   RustFS-Dienst selbst (Installation, TLS, Bucket, S3-Key bleiben Runbook).
   NPM, DNS und Proxmox-Host-Konfig bleiben ebenfalls außen vor.
 
-  **Aufwand:** ~5–7 Std. inkl. eigenem ADR (LXC-Import mit
-  Sicherheits-Protokoll: 3–4 Std.; Proxmox-IAM-Teil: 2–3 Std.).
+  **Aufwand:** ~5–7 Std. inkl. eigenem ADR.
 
-  Phase 2 ist abgeschlossen; dieser Punkt ist damit entblockt (Priorität
-  gegenüber Phase 3 noch zu wählen).
+- **ADR-0010 (geplant):** Config-Management mit Ansible (eigenes Playbook,
+  Werkzeug-Grenze Tofu/Ansible) – schreiben, wenn der k3s-Install steht.
 
 ## Kontext / Details
 - Entscheidungen: `docs/adr/0001`–`0009` (0002 ersetzt durch 0006;
-  0009 = VM-Provisioning: Cloud-Image-Import + natives cloud-init)
+  0004 + 0009 mit Nachträgen vom 2026-08-25; 0009 = VM-Provisioning:
+  Cloud-Image-Import + natives cloud-init)
 - Betrieb State-Backend: `docs/runbooks/state-backend-rustfs.md`
 - Proxmox-Zugang: `docs/runbooks/proxmox-access.md`

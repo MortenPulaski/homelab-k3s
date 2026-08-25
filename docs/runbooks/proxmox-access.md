@@ -20,7 +20,7 @@ Wie der API-Zugriff für OpenTofu auf Proxmox VE eingerichtet ist.
   - Split-Horizon-DNS (AdGuard Home): `pve2.marpal-it.de` löst nur im
     lokalen Netzwerk auf.
 
-## Hinweis: `VM.Monitor` in PVE 9
+## Hinweis: Rechte-Eigenheiten unter Proxmox VE 9
 
 Seit Proxmox VE 9.0 ist das Privileg `VM.Monitor` entfernt (ersetzt durch
 `Sys.Audit` für Informationsabfragen sowie feingranulare
@@ -28,15 +28,39 @@ Seit Proxmox VE 9.0 ist das Privileg `VM.Monitor` entfernt (ersetzt durch
 `VM.Monitor` noch listen, schlagen auf PVE 9.x mit
 `invalid privilege 'VM.Monitor'` fehl.
 
+Beim ersten realen VM-Create (Phase 2) forderte der `bpg/proxmox`-Provider
+iterativ drei weitere Rechte an, die im reinen Auth-Test aus Phase 1 (keine
+`resource`, nur `plan`) nie auftraten:
+
+- `Datastore.AllocateTemplate` – Download des Cloud-Images über die
+  download-url-API (zusätzlich zu `Sys.Audit`/`Sys.Modify`). Nicht
+  PVE-9-spezifisch, aber erst mit dem Image-Download nötig.
+- `VM.Config.HWType` – Setzen von Maschinentyp/BIOS/SCSI-Controller, das der
+  Provider beim Create implizit vornimmt.
+- `SDN.Use` – unter PVE 8/9 liegt auch eine einfache Linux-Bridge in der
+  SDN-Zone `localnetwork`; eine NIC an `vmbr0` zu hängen verlangt daher
+  `SDN.Use` auf `/sdn/zones/localnetwork/vmbr0`. Propagiert von `/`, also
+  durch die bestehende ACL abgedeckt.
+
+Least-Privilege-Logik wie beim übrigen Rollenzuschnitt: real beim VM-Create
+angefordert, nicht vorsorglich gesetzt.
+
 ## Rolle anlegen
 
 ```bash
-pveum role add TofuRole -privs "VM.Allocate VM.Audit VM.Clone VM.Config.Disk VM.Config.CPU VM.Config.Memory VM.Config.Network VM.Config.Options VM.Config.Cloudinit VM.PowerMgmt VM.Migrate VM.GuestAgent.Audit Datastore.Allocate Datastore.AllocateSpace Datastore.Audit Sys.Audit Sys.Modify"
+pveum role add TofuRole -privs "VM.Allocate VM.Audit VM.Clone VM.Config.Disk VM.Config.CPU VM.Config.Memory VM.Config.Network VM.Config.Options VM.Config.Cloudinit VM.Config.HWType VM.PowerMgmt VM.Migrate VM.GuestAgent.Audit Datastore.Allocate Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit Sys.Audit Sys.Modify SDN.Use"
 ```
 
+> Werden Rechte nachträglich ergänzt (wie in Phase 2 geschehen), `pveum role
+> modify TofuRole -privs "…"` mit der **vollständigen** Liste verwenden –
+> `modify` ersetzt die Priv-Liste, ergänzt sie nicht.
+
 `VM.GuestAgent.Audit` (lesend) ist enthalten, da der `bpg/proxmox`-Provider den
-QEMU-Guest-Agent nutzt, um nach dem Boot die vergebene IP-Adresse einer VM
-auszulesen (relevant ab Phase 2). Schreibende Guest-Agent-Rechte
+QEMU-Guest-Agent nutzt, um nach dem Boot Statusdaten (z. B. die vergebene
+IP-Adresse) auszulesen. In Phase 2 läuft die VM bewusst **ohne** Agent
+(`agent { enabled = false }`, statische IP via cloud-init); relevant wird das
+Recht ab Phase 3, sobald der Guest-Agent via Ansible installiert und
+`agent { enabled = true }` gesetzt ist. Schreibende Guest-Agent-Rechte
 (`VM.GuestAgent.FileWrite`, `.Unrestricted`) sind bewusst **nicht** enthalten
 (Least-Privilege).
 
@@ -48,7 +72,7 @@ pveum aclmod / -user tofu@pve -role TofuRole
 ```
 
 ACL-Pfad `/` = Datacenter-Root; die Rolle propagiert (`*`) in alle
-Unterpfade (`/vms`, `/storage`, `/nodes`, …).
+Unterpfade (`/vms`, `/storage`, `/nodes`, `/sdn`, …).
 
 ## API-Token erzeugen
 
@@ -76,15 +100,17 @@ Konfiguriert in `infra/live/homelab/provider.tf`:
 - Auth über `PROXMOX_VE_API_TOKEN` aus `secrets.sops.yaml` (siehe Abschnitt
   „Ablage" oben) – kein Token-Wert im Provider-Block selbst
 
-Verifiziert mit:
+Initial verifiziert (Phase-1-Setup, vor der ersten Ressource):
 
 ```bash
 tofu init
 tofu plan
 ```
 
-Erwartetes Ergebnis: `No changes. Your infrastructure matches the
-configuration.` (keine VM-Ressourcen definiert, reiner Auth-/Verbindungstest)
+Ergebnis damals: `No changes. Your infrastructure matches the configuration.`
+– reiner Auth-/Verbindungstest, da noch keine `resource`-Blöcke existierten.
+Ab Phase 2 verwaltet `plan`/`apply` reale Ressourcen (Cloud-Image-Download,
+VMs); die Verbindungs- und Auth-Mechanik ist dabei dieselbe.
 
 ## Verifikation (Proxmox-Rechte)
 
@@ -92,4 +118,6 @@ configuration.` (keine VM-Ressourcen definiert, reiner Auth-/Verbindungstest)
 pveum user permissions tofu@pve
 ```
 
-Zeigt die tatsächlich zugewiesenen Rechte je ACL-Pfad zur Kontrolle.
+Zeigt die tatsächlich zugewiesenen Rechte je ACL-Pfad zur Kontrolle. Erwartet:
+die oben unter „Rolle anlegen" gelisteten Privilegien, von `/` auf alle
+Unterpfade propagiert.

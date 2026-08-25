@@ -1,10 +1,10 @@
 # Status
 
-**Stand:** 2026-08-23
+**Stand:** 2026-08-25
 
 ## Phasenplan
 - ✅ Phase 1 – Fundament & Setup (Git, Tooling, Secrets, State-Backend, Proxmox-Zugang) — abgeschlossen
-- Phase 2 – VMs via OpenTofu + cloud-init
+- ✅ Phase 2 – VMs via OpenTofu + cloud-init (Debian-Image, VM-Modul, 5-Node-Cluster) — abgeschlossen
 - Phase 3 – k3s-Cluster
 - Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager)
 - Phase 5 – GitOps (ArgoCD/Flux)
@@ -23,12 +23,17 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   (`pve2.marpal-it.de`)
 - RustFS-State-Backend: LXC `8001`, IP `192.168.0.68`
 - Tofu-Endpoint: `https://s3.marpal-it.de` (TLS via NPM), Bucket `tofu-state`
-- Proxmox-API-Zugang: User `tofu@pve`, Rolle `TofuRole`, Provider
-  `bpg/proxmox` 0.111.1 (siehe `docs/runbooks/proxmox-access.md`)
-- k3s-IP-Plan (statisch via cloud-init, Phase 2):
+- Proxmox-API-Zugang: User `tofu@pve`, Rolle `TofuRole` (in Phase 2 um die
+  beim VM-Create angeforderten Rechte erweitert), Provider `bpg/proxmox`
+  0.111.1 (siehe `docs/runbooks/proxmox-access.md`)
+- Zweiter Provider: `hashicorp/local` (liest den öffentlichen SSH-Key für
+  cloud-init) – im Lockfile gepinnt
+- VM-Basis-Image: Debian 13 „Trixie" genericcloud, via `download_file` nach
+  Datastore `local` gezogen; VM-Disks auf ZFS `lab`
+- k3s-Nodes (statisch via cloud-init, in Phase 2 provisioniert):
   - `192.168.0.160`–`162`: Server-Nodes (embedded etcd, HA)
   - `192.168.0.163`–`164`: Agent-Nodes
-  - `192.168.0.170`: kube-vip (API-Server-VIP)
+  - `192.168.0.170`: kube-vip (API-Server-VIP, Phase 3)
   - `192.168.0.165`–`169`: Reserve
   - Begründung/Trade-off: siehe ADR-0008
 - Arbeitsverzeichnis Tofu: `infra/live/homelab/`
@@ -46,19 +51,39 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
 - k3s-Cluster-Design: HA-Topologie (3 Server + 2 Agents) + IP-Plan
   festgelegt, Trade-off dokumentiert in ADR-0008
 
+## Erledigt (Phase 2)
+- Cloud-Image via Tofu gezogen: `proxmox_download_file` (Content-Type
+  `import`, Ziel `local`), Debian 13 genericcloud – als Code, kein manueller
+  Template-Bau
+- Wiederverwendbares VM-Modul `infra/modules/vm/` – natives cloud-init
+  (nur API, kein SSH auf den Host), `agent { enabled = false }`; Node-Prep
+  bewusst nach Phase 3 (Ansible) verschoben. Begründung: ADR-0009
+- 5-Node-Topologie provisioniert: 3 Server (`.160`–`.162`) + 2 Agents
+  (`.163`–`.164`) über `module` + `for_each`, statische IPs; verifiziert
+  (SSH, Hostname, IP, Disk-Grow auf 20 G)
+- State-Umzug der ersten (flachen) VM ins Modul via `moved`-Block – kein
+  Rebuild (`0 changed, 0 destroyed`)
+- Proxmox-Rolle iterativ um `Datastore.AllocateTemplate`, `VM.Config.HWType`,
+  `SDN.Use` erweitert (real beim VM-Create angefordert, PVE-9-Eigenheiten) –
+  Runbook fortgeschrieben
+- `.gitignore` gehärtet: modul-lokale `.terraform.lock.hcl` ignoriert, die
+  Root-Lockfile bleibt bewusst versioniert (Provider-Pinning, ADR-0004)
+
 ## Repo-Struktur
 
     .
     ├── docs/
-    │   ├── adr/           # Architektur-Entscheidungen (0001–0008)
+    │   ├── adr/           # Architektur-Entscheidungen (0001–0009)
     │   ├── runbooks/      # Betrieb/Reproduktion laufender Systeme
     │   └── STATUS.md      # dieser Kontext-Anker
     ├── infra/             # OpenTofu
-    │   ├── modules/       # wiederverwendbare Bausteine (noch leer)
+    │   ├── modules/
+    │   │   └── vm/        # wiederverwendbares VM-Modul
+    │   │                  #   (main/variables/outputs/versions.tf)
     │   └── live/homelab/  # konkrete Umgebung: backend.tf, encryption.tf,
-    │                      #   variables.tf, provider.tf, secrets.sops.yaml
-    │                      #   (verschlüsselt)
-    ├── bootstrap/         # k3s-Installation (Phase 2, noch leer)
+    │                      #   variables.tf, provider.tf, image.tf,
+    │                      #   k3s-nodes.tf, secrets.sops.yaml (verschlüsselt)
+    ├── bootstrap/         # k3s-Installation via Ansible (Phase 3, noch leer)
     ├── cluster/           # k8s-/GitOps-Manifeste (Phase 5, noch leer)
     ├── mise.toml          # Tool-Versionen gepinnt
     ├── .sops.yaml         # SOPS-Regeln (öffentl. age-Key)
@@ -66,7 +91,7 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
 
 ## Offen
 
-- **Foundation-Projekt (Backlog, nach Phase 2):** RustFS-LXC + Proxmox-Zugang
+- **Foundation-Projekt (Backlog):** RustFS-LXC + Proxmox-Zugang
   (`tofu@pve`) als eigenes, getrenntes Tofu-Projekt `foundation/` codifizieren
   (Bootstrap-Stack-Muster, eigener lokaler PBKDF2-State, gitignored, Backup
   im Passwortmanager – kein Zirkelbezug zu ADR-0006).
@@ -102,10 +127,11 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   **Aufwand:** ~5–7 Std. inkl. eigenem ADR (LXC-Import mit
   Sicherheits-Protokoll: 3–4 Std.; Proxmox-IAM-Teil: 2–3 Std.).
 
-  Bewusst zurückgestellt: Phase 2 hat Priorität (erste echte VM vor
-  vierter Fundament-Aufgabe).
+  Phase 2 ist abgeschlossen; dieser Punkt ist damit entblockt (Priorität
+  gegenüber Phase 3 noch zu wählen).
 
 ## Kontext / Details
-- Entscheidungen: `docs/adr/0001`–`0008` (0002 ersetzt durch 0006)
+- Entscheidungen: `docs/adr/0001`–`0009` (0002 ersetzt durch 0006;
+  0009 = VM-Provisioning: Cloud-Image-Import + natives cloud-init)
 - Betrieb State-Backend: `docs/runbooks/state-backend-rustfs.md`
 - Proxmox-Zugang: `docs/runbooks/proxmox-access.md`

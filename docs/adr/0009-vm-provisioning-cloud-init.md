@@ -77,3 +77,34 @@ installieren** – insbesondere nicht den `qemu-guest-agent`.
 Diese Entscheidung betrifft, *wie* eine VM entsteht und erstkonfiguriert wird.
 *Welche* VMs es gibt (Topologie, IP-Plan) regelt ADR-0008; die Modul-Struktur
 (`modules/vm` + `for_each`) ist Umsetzungsdetail und kein eigener ADR.
+
+## Nachtrag (2026-08-25): Agent-Aktivierung ist zweistufig
+
+Belegt (dpkg.log auf einem Node): Das Debian-13-genericcloud-Image bringt
+`qemu-guest-agent` NICHT mit (Vorzustand `<none>`, Installation erst durch die
+Ansible-prep-Rolle). `agent.enabled = true` lässt sich daher nicht als reine
+Erstellungs-Eigenschaft setzen: Das Paket kommt erst nach dem VM-Create auf den
+Node, und `agent = true` bei nicht-laufendem Agent führt laut bpg-Doku zu
+Timeout/Lock bei Proxmox-Shutdown/Reboot.
+
+Gesteuert wird das über die Root-Variable `agent_enabled` (live-Default `true`,
+Modul-Default `false`). Der Wert fließt: Root-Variable → Modulaufruf →
+Modul-Eingabevariable → `agent { enabled = ... }`. Nur die Root-Variable ist per
+`-var` von außen übersteuerbar; der Modul-Default `false` ist die Absicherung,
+falls die Root-Variable einmal fehlt.
+
+Steady state: nichts angeben → Default `true`, Agent an.
+
+Von-Null-Neubau, zweistufig:
+
+1. `tofu apply -var agent_enabled=false` → VMs entstehen ohne Agent-Kanal.
+2. `ansible-playbook site.yml` → installiert den Agent auf den Nodes.
+3. `tofu apply` (fällt auf den Default `true` zurück) → Kanal wird aktiviert;
+   der Provider rebootet die VMs dabei selbst (`reboot_after_update` per Default
+   true, nicht-hotplugfähige Änderung), wodurch der virtio-serial-Kanal
+   erscheint und der Agent von selbst hochkommt. Nur falls der
+   Pre-Reboot-guest-ping hängt (bpg-Issue #2029), den betroffenen Node einmal
+   manuell stop/start.
+
+Der laufende Betrieb fasst `agent_enabled` nicht an — es ist ein
+Bring-up-Schalter, kein Betriebs-Dial.

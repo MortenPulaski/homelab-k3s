@@ -1,5 +1,10 @@
 # === OpenTofu / Terraform =====================================================
-.terraform/
+# Tofu-Arbeitsverzeichnis (überall regenerierbar)
+**/.terraform/
+
+# Lockfile NUR in Modulen ignorieren – die im Root-Modul wird bewusst committet
+infra/modules/**/.terraform.lock.hcl
+
 *.tfstate
 *.tfstate.*
 crash.log

@@ -1,4 +1,12 @@
 ---
+- name: k3s-Server-Config (tls-san für kube-vip-VIP) bereitstellen
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: k3s-Server installieren (cluster-init auf Server-1, Join auf 2/3)
   ansible.builtin.shell: |
     curl -sfL https://get.k3s.io | \

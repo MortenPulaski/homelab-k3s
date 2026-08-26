@@ -196,17 +196,18 @@ neu starten – unnötiges Risiko, ähnlich riskant wie der kube-vip-Vorfall obe
 README unter „Reproduzieren" – siehe TODO dort.)*
 
 ## Nächster Schritt (Phase 3 – kube-vip nachrüsten)
-- `tls-san`-Config (`/etc/rancher/k3s/config.yaml`) + Rolling-Restart auf
-  allen 3 Servern (VIP `192.168.0.170` ins API-Server-Zertifikat)
-- kube-vip RBAC + DaemonSet per `kubectl apply` (nicht mehr Boot-Zeit-Manifest),
-  Version `v1.2.0`, Modi `--controlplane --services` (Services-LB schon mit
-  aktiviert, auch wenn `cluster/` noch leer ist – ohne IP-Pool passiert bis
-  Phase 4 nichts)
-- Verifikation: VIP erreichbar, IPv4-Stabilität über längeren Zeitraum
-  beobachten (Lehre aus dem gescheiterten ersten Versuch)
-- Danach: ADR-0010 (Config-Management/k3s-Bootstrap-Entscheidungen
-  dokumentieren, inkl. kube-vip-Lessons-Learned: Boot-Zeit-Manifest vs.
-  nachträglicher `kubectl apply`)
+- ✅ `tls-san`-Config als Ansible-Task ausgerollt: `roles/k3s_server/templates/config.yaml.j2`
+  + Template-Task in `roles/k3s_server/tasks/main.yml` (bewusst VOR dem
+  bestehenden Install-Task, damit ein Von-Null-Neubau die VIP von Anfang an
+  im Zertifikat hat, kein nachträglicher Restart nötig). Verifiziert per
+  `--check --diff`, danach scharf auf allen 3 Servern gelaufen
+  (`changed=1` je Server). `/etc/rancher/k3s/config.yaml` mit
+  `tls-san: 192.168.0.170` liegt jetzt auf `srv-1`–`srv-3`.
+  ✅ Rolling-Restart über neue Play in `site.yml` (Tag `kube-vip-restart`,
+  `serial: 1`, `wait_for` auf Port 6443 zwischen den Nodes) auf allen 3
+  Servern gelaufen. Verifiziert per `openssl s_client` gegen
+  `192.168.0.160:6443`: API-Server-Zertifikat enthält `192.168.0.170` als
+  SAN. **tls-san-Teilschritt damit abgeschlossen.**
 
 ## Repo-Struktur
 

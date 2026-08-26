@@ -26,3 +26,21 @@
   roles:
     - k3s_agent
   tags: [k3s]
+
+- name: Rolling-Restart k3s-Server (tls-san für kube-vip-VIP wirksam machen)
+  hosts: k3s_servers
+  become: true
+  serial: 1
+  tags: [kube-vip-restart]
+  tasks:
+    - name: k3s-Dienst neu starten
+      ansible.builtin.systemd_service:
+        name: k3s
+        state: restarted
+
+    - name: Warten, bis API-Server wieder erreichbar ist
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 6443
+        delay: 5
+        timeout: 120

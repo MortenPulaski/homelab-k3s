@@ -202,20 +202,42 @@ auf eine datierte Build-URL wechseln – eigener kleiner ADR-Nachtrag wert.
 
 ## Aktueller Stand (Ende Session 2026-08-26)
 
-Neuaufbau von Null **unterbrochen** bei `tofu apply -var agent_enabled=false`
-(Checksum-Mismatch/Debian-Ausfall, siehe oben). `tofu destroy` bereits
-erfolgreich durchgelaufen – **keine VMs aktuell vorhanden.**
+Neuaufbau von Null **erfolgreich abgeschlossen**. Zwei Nacharbeiten
+unterwegs nötig (beide committed):
 
-**Nächster Schritt bei Fortsetzung:**
-1. Aktuellen SHA512-Hash für `debian-13-genericcloud-amd64.qcow2` ziehen
-   (`curl .../SHA512SUMS`, Debian-Erreichbarkeit vorher prüfen), in
-   `infra/live/homelab/images.tf` eintragen.
-2. `tofu apply -var agent_enabled=false` → `ansible-playbook site.yml --tags prep`
-   → `tofu apply` → `ansible-playbook site.yml --tags k3s` (tls-san bereits
-   in der Rolle integriert, kein separater Restart-Schritt bei Neuaufbau nötig).
-3. Verifikation wie gehabt (`kubectl get nodes`, Zertifikat-SAN-Check).
-4. kube-vip **erst nach** Klärung des ServiceLB-Konflikts (siehe oben) erneut
-   versuchen.
+- `infra/live/homelab/images.tf`: SHA512-Checksum aktualisiert (Debian-
+  Point-Release-Wechsel, siehe Nachtrag oben).
+- `bootstrap/roles/k3s_server/tasks/main.yml`: `ansible.builtin.file`-Task
+  ergänzt, der `/etc/rancher/k3s` anlegt, bevor die `tls-san`-Config dorthin
+  geschrieben wird – fehlte bisher, weil das Verzeichnis bei den vorher
+  bereits laufenden Servern schon existierte und der Fall beim Von-Null-Bau
+  nie getestet wurde.
+- `502`-Fehler beim State-Backend während des Versuchs: RustFS-Dienst war
+  kurzzeitig down, kein Code-/Config-Problem – durch Neustart des Dienstes
+  gelöst.
+
+**Verifiziert:**
+- Alle 5 Nodes `Ready` (3 Server `control-plane,etcd` + 2 Agents).
+- API-Server-Zertifikat enthält `192.168.0.170` (VIP) als SAN, **ohne**
+  separaten Rolling-Restart – der `tls-san`-Task lief wie vorgesehen vor dem
+  allerersten k3s-Start.
+
+**Bewusst NICHT gemacht:** kube-vip-RBAC/DaemonSet erneut angewendet. Grund
+siehe Nachtrag oben (ServiceLB/Klipper-Konflikt) – Fix-Entscheidung
+(`--disable servicelb` vs. `--services` vorerst entfernen) steht noch aus.
+
+## Nächster Schritt (Phase 3 – kube-vip nachrüsten, Fortsetzung)
+
+1. **Architektur-Entscheidung zuerst**, vor jedem erneuten `kubectl apply`:
+   `--disable servicelb` beim k3s-Server-Start ergänzen, oder `--services`
+   aus `cluster/kube-vip/daemonset.yaml` vorerst entfernen (nur
+   `--controlplane`, Traefik-LB bleibt vorerst bei Klipper). Trade-offs siehe
+   Nachtrag oben.
+2. Erst danach: kube-vip RBAC + DaemonSet erneut anwenden, mit dem gewählten
+   Fix.
+3. Verifikation: VIP erreichbar, IPv4-Stabilität über längeren Zeitraum
+   beobachten (Lehre aus **beiden** gescheiterten Versuchen).
+4. Danach: ADR-0010 (inkl. Lessons-Learned aus beiden kube-vip-Vorfällen).
 
 ### Nachtrag (2026-08-26): Kontrollierter Cluster-Shutdown + Proxmox-Startreihenfolge
 

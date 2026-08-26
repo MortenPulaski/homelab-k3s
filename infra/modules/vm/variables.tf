@@ -12,6 +12,12 @@ variable "agent_enabled" {
   default     = false # sicherer Default fürs Erst-Deployment
 }
 
+variable "on_boot" {
+  description = "Ob die VM beim Proxmox-Host-Boot automatisch startet (defaults to true beim Provider, hier bewusst false fürs Lern-Setup)."
+  type        = bool
+  default     = false
+}
+
 # von der Live-Ebene durchgereicht (Modul greift nicht selbst ins Dateisystem)
 variable "image_id" { type = string }
 variable "ssh_public_key" { type = string }

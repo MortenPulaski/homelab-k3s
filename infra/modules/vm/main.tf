@@ -4,6 +4,7 @@ resource "proxmox_virtual_environment_vm" "this" {
   name      = var.name
   node_name = var.node_name
   vm_id     = var.vm_id
+  on_boot   = var.on_boot
 
   agent { enabled = var.agent_enabled }
   stop_on_destroy = true

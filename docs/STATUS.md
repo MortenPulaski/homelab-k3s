@@ -148,6 +148,28 @@ agent_enabled=false` (VM-Neubau, State/Secrets/Code unberührt) → `k3s_server`
 Rolle um kube-vip-Tasks und `--tls-san` bereinigt → `ansible-playbook site.yml`
 → `tofu apply` (Guest-Agent-Kanal reaktivieren).
 
+### Nachtrag (2026-08-26): Kontrollierter Cluster-Shutdown + Proxmox-Startreihenfolge
+
+- **`bootstrap/shutdown.yml`** (neues, separates Playbook, nicht Teil von
+  `site.yml`): drei sequenzielle Plays – erst `k3s-agent` auf den Agents
+  stoppen, dann `k3s` auf den Servern, zuletzt alle Nodes per
+  `community.general.shutdown` herunterfahren. Reihenfolge Agents-vor-Server
+  ist beim gemeinsamen Shutdown nicht quorum-kritisch (alle 3 Server gehen
+  gleichzeitig runter, siehe ADR-0008), dient aber saubereren Logs und
+  spiegelt die Startreihenfolge.
+- **Proxmox Start/Shutdown-Reihenfolge jetzt via Tofu codifiziert**
+  (`infra/modules/vm/`, neue optionale Variablen `startup_order` /
+  `startup_up_delay`, `dynamic "startup"`-Block): Server-Nodes
+  `order = 1, up_delay = 30`, Agent-Nodes `order = 2`. Grund: Agents
+  brauchen beim Boot einen erreichbaren API-Server; ohne definierte
+  Reihenfolge (`any`, Proxmox-Default) starten alle 5 VMs beim
+  UI-Massenstart parallel. Damit ist ein einzelner Massenstart aller
+  5 VMs in der Proxmox-UI sicher möglich, ohne die Agents manuell
+  zeitversetzt zu starten.
+- `down_delay` bewusst nicht gesetzt (Provider-Default `-1`/kein Delay) –
+  der Shutdown-Pfad läuft über das Ansible-Playbook oben, nicht über
+  Proxmox' eigenen Shutdown-Mechanismus.
+
 ## Reproduzierbarer Node-Bring-up (Neuaufbau von Null)
 
 Der Recovery-Weg oben lief zunächst nur, weil die Befehle manuell in der

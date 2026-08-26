@@ -52,6 +52,9 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
 - Arbeitsverzeichnis Ansible: `bootstrap/`
 - Tooling gepinnt via mise (OpenTofu 1.12.6; Sops 3.13.3; age 1.3.1;
   Ansible 14.3.1; pipx 1.16.7; **kubectl 1.36.3**, passend zur k3s-Version)
+- Commit-Konvention: Commit-Messages ab sofort auf Englisch (frühere deutsche
+  Messages der k3s-Bootstrap-Serie per interaktivem Rebase nachträglich
+  übersetzt)
 
 ## Erledigt (Phase 1, Schritte 1–5)
 - Git-Fundament: öffentliches GitHub-Repo, gitleaks + Push Protection
@@ -113,9 +116,10 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   `k3s_primary`-Flag in `hosts.yml`, Join für srv-2/3) + `k3s_agent` (Join
   gegen Server-1) – zwei Rollen statt drei, da sich die Server-Varianten fast
   alle Tasks teilen
-- `site.yml`: 4 Plays (prep → srv-1 → restliche Server → Agents); Server-1
-  bewusst als eigener Play (nicht `serial`), um unterschiedliche Rollen-Zweige
-  sauber zu trennen
+- `site.yml`: 4 Plays (prep → srv-1 → restliche Server → Agents), zusätzlich
+  mit `tags: [prep]` / `tags: [k3s]` versehen; Server-1 bewusst als eigener
+  Play (nicht `serial`), um unterschiedliche Rollen-Zweige sauber zu trennen.
+  Grund fürs Tagging: siehe „Reproduzierbarer Node-Bring-up" unten
 - **Basis-Cluster live verifiziert:** 3 Server (`control-plane,etcd`) + 2
   Agents, alle `Ready`, `v1.36.3+k3s1`, korrekte IPs
 
@@ -143,6 +147,29 @@ auf allen 3 Servern ergänzt werden. **Noch nicht umgesetzt** – nächster Schr
 agent_enabled=false` (VM-Neubau, State/Secrets/Code unberührt) → `k3s_server`-
 Rolle um kube-vip-Tasks und `--tls-san` bereinigt → `ansible-playbook site.yml`
 → `tofu apply` (Guest-Agent-Kanal reaktivieren).
+
+## Reproduzierbarer Node-Bring-up (Neuaufbau von Null)
+
+Der Recovery-Weg oben lief zunächst nur, weil die Befehle manuell in der
+richtigen Reihenfolge eingegeben wurden – das Playbook selbst erzwang nichts.
+Seit dem `site.yml`-Tagging (`prep` / `k3s`) ist die Reihenfolge nicht mehr
+von der manuellen Befehlsfolge abhängig, sondern strukturell erzwungen:
+
+```bash
+tofu destroy
+tofu apply -var agent_enabled=false   # VMs ohne Guest-Agent-Kanal (ADR-0009)
+ansible-playbook site.yml --tags prep # Guest-Agent-Paket + Hygiene, noch kein k3s
+tofu apply                            # Kanal aktivieren, EIN Reboot – vor k3s, nicht danach
+ansible-playbook site.yml --tags k3s  # erst jetzt k3s_server + k3s_agent
+```
+
+**Warum die Trennung zwingend ist:** Der zweite `tofu apply` rebootet die VMs
+(`reboot_after_update`). Liefe k3s zu dem Zeitpunkt schon, würde OpenTofu einen
+laufenden etcd-Cluster unkontrolliert (nicht `serial`, keine Ansible-Reihenfolge)
+neu starten – unnötiges Risiko, ähnlich riskant wie der kube-vip-Vorfall oben.
+
+*(Wandert nach Phase-3-Abschluss inkl. kube-vip als finale Fassung in die
+README unter „Reproduzieren" – siehe TODO dort.)*
 
 ## Nächster Schritt (Phase 3 – kube-vip nachrüsten)
 - `tls-san`-Config (`/etc/rancher/k3s/config.yaml`) + Rolling-Restart auf
@@ -179,7 +206,7 @@ Rolle um kube-vip-Tasks und `--tls-san` bereinigt → `ansible-playbook site.yml
     │   │   ├── prep/                 # Node-Vorbereitung (Phase 3a)
     │   │   ├── k3s_server/           # cluster-init / Join (Server)
     │   │   └── k3s_agent/            # Join (Agent)
-    │   └── site.yml                  # Haupt-Playbook, 4 Plays
+    │   └── site.yml                  # Haupt-Playbook, 4 Plays, Tags prep/k3s
     ├── cluster/           # k8s-/GitOps-Manifeste (Phase 5, noch leer)
     ├── mise.toml          # Tool-Versionen gepinnt (inkl. kubectl 1.36.3)
     ├── .sops.yaml         # SOPS-Regeln (öffentl. age-Key)

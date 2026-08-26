@@ -1,3 +1,7 @@
 ---
 # Gemeinsame Variablen für alle Nodes.
 # k3s_version, kube-vip-VIP und Netzwerk-Interface folgen in späteren Schritten.
+k3s_token: "{{ lookup('env', 'K3S_TOKEN') }}"
+k3s_version: "v1.36.3+k3s1"
+kube_vip_version: "v1.2.0"
+kube_vip_address: "192.168.0.170"

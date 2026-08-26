@@ -4,3 +4,21 @@
   become: true
   roles:
     - prep
+
+- name: Bootstrap first k3s server (cluster-init)
+  hosts: srv-1
+  become: true
+  roles:
+    - k3s_server
+
+- name: Join remaining k3s servers
+  hosts: k3s_servers:!srv-1
+  become: true
+  roles:
+    - k3s_server
+
+- name: Join k3s agents
+  hosts: k3s_agents
+  become: true
+  roles:
+    - k3s_agent

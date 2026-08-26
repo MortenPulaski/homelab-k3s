@@ -1,0 +1,11 @@
+---
+- name: k3s-Agent installieren (Join gegen Server-1)
+  ansible.builtin.shell: |
+    curl -sfL https://get.k3s.io | \
+    INSTALL_K3S_VERSION={{ k3s_version }} \
+    K3S_URL=https://192.168.0.160:6443 \
+    K3S_TOKEN={{ k3s_token }} \
+    sh -s - agent
+  args:
+    creates: /usr/local/bin/k3s
+  become: true

@@ -148,6 +148,75 @@ agent_enabled=false` (VM-Neubau, State/Secrets/Code unberührt) → `k3s_server`
 Rolle um kube-vip-Tasks und `--tls-san` bereinigt → `ansible-playbook site.yml`
 → `tofu apply` (Guest-Agent-Kanal reaktivieren).
 
+### Nachtrag 2 (2026-08-26): kube-vip per kubectl apply – ServiceLB-Konflikt
+
+Zweiter Versuch (nach Boot-Zeit-Manifest-Scheitern oben): kube-vip-RBAC +
+DaemonSet (`v1.2.0`, `--controlplane --services --arp`) per `kubectl apply`
+gegen den laufenden Cluster angewendet, wie oben als Fix vorgesehen.
+
+**Ergebnis: erneuter Vorfall, andere Ursache.** Nicht dasselbe Problem wie
+beim Boot-Zeit-Manifest (kein IPv4-Verlust der Node-eigenen Adresse), sondern:
+
+- k3s installiert standardmäßig **Traefik** als `type: LoadBalancer`-Service.
+- k3s' eingebautes **ServiceLB (Klipper)** weist solchen Services **die IPs
+  aller berechtigten Nodes** als External-IPs zu (Standardverhalten, siehe
+  k3s-Doku „Networking Services").
+- kube-vip mit `--services` (`svc_enable: true`) beobachtet genau diese
+  LoadBalancer-Services und übernimmt deren External-IP-Liste zur
+  ARP-Advertisement. Da es **eine globale Leader-Election** gibt (nicht pro
+  Service), bindet der gewählte Leader-Node **alle** diese Adressen lokal
+  (`ip addr … deprecated`) – beobachtet: sämtliche Server- UND Agent-IPs
+  (`.160`–`.164`) auf dem jeweiligen Leader.
+- Folge: ARP-Antworten für fremde Node-IPs, dadurch fehlgeleiteter
+  etcd-Peer-Traffic (Port `2380`) zwischen den Servern → Quorum-Verlust →
+  API-Server bleibt im Start hängen (`ServiceUnavailable`, `no leader`).
+
+**Diagnose-Weg, der funktioniert hat, als Netzwerk/SSH bereits unzuverlässig
+waren:** QEMU-Guest-Agent (`qm guest exec <vmid> -- …` auf `pve2`) – läuft
+über virtio-serial, umgeht Netzwerk/ARP vollständig, führt Befehle direkt als
+root aus. Damit: Adressen inspiziert/bereinigt (`ip addr del … dev eth0`),
+kube-vip-Container gezielt gestoppt (`k3s crictl stop`), DaemonSet gelöscht
+(`k3s kubectl delete daemonset kube-vip-ds -n kube-system`).
+
+**Entscheidung:** Nach Bereinigungsversuchen und anhaltender Instabilität
+(mehrfache CrashLoopBackOff-Zyklen von kube-vip, jeder Zyklus schrieb die
+Adressen erneut) Entschluss zum vollständigen Neuaufbau statt Weiter-Debugging
+im laufenden System: `tofu destroy` + kompletter Bring-up von Null.
+
+**Fix vor erneutem kube-vip-Einsatz (noch nicht umgesetzt):** entweder
+`--disable servicelb` beim k3s-Server-Start ergänzen (Traefik-LB-Funktion
+entfällt dann bis zu einem bewussten Ersatz, z. B. MetalLB oder Ingress ohne
+LB-Type), oder `--services`/`svc_enable` aus dem kube-vip-Manifest vorerst
+entfernen und erst in Phase 4 zusammen mit dem echten Ingress-Konzept wieder
+aktivieren. `cluster/kube-vip/*.yaml` liegen bereits im Repo, mit
+Warnkommentar versehen – **nicht ohne diesen Fix erneut `kubectl apply`en.**
+
+**Nebenbefund, separat vom kube-vip-Vorfall:** `debian-13-genericcloud-amd64.qcow2`
+unter `.../trixie/latest/` ist ein rollierender Pointer (ändert sich pro
+Debian-Point-Release), der in `images.tf` hinterlegte SHA512-Checksum war
+dadurch veraltet (`checksum mismatch` beim Neuaufbau). Zusätzlich zeitweiser
+Ausfall von `cloud.debian.org` selbst während des Vorfalls. Fix: aktuellen
+Hash aus `SHA512SUMS` neu ziehen. Strukturisches Follow-up (noch offen):
+Checksum dynamisch per `data "http"`-Source statt hartkodiert beziehen, oder
+auf eine datierte Build-URL wechseln – eigener kleiner ADR-Nachtrag wert.
+
+## Aktueller Stand (Ende Session 2026-08-26)
+
+Neuaufbau von Null **unterbrochen** bei `tofu apply -var agent_enabled=false`
+(Checksum-Mismatch/Debian-Ausfall, siehe oben). `tofu destroy` bereits
+erfolgreich durchgelaufen – **keine VMs aktuell vorhanden.**
+
+**Nächster Schritt bei Fortsetzung:**
+1. Aktuellen SHA512-Hash für `debian-13-genericcloud-amd64.qcow2` ziehen
+   (`curl .../SHA512SUMS`, Debian-Erreichbarkeit vorher prüfen), in
+   `infra/live/homelab/images.tf` eintragen.
+2. `tofu apply -var agent_enabled=false` → `ansible-playbook site.yml --tags prep`
+   → `tofu apply` → `ansible-playbook site.yml --tags k3s` (tls-san bereits
+   in der Rolle integriert, kein separater Restart-Schritt bei Neuaufbau nötig).
+3. Verifikation wie gehabt (`kubectl get nodes`, Zertifikat-SAN-Check).
+4. kube-vip **erst nach** Klärung des ServiceLB-Konflikts (siehe oben) erneut
+   versuchen.
+
 ### Nachtrag (2026-08-26): Kontrollierter Cluster-Shutdown + Proxmox-Startreihenfolge
 
 - **`bootstrap/shutdown.yml`** (neues, separates Playbook, nicht Teil von

@@ -1,11 +1,11 @@
 # Status
 
-**Stand:** 2026-08-25
+**Stand:** 2026-08-26
 
 ## Phasenplan
 - ✅ Phase 1 – Fundament & Setup (Git, Tooling, Secrets, State-Backend, Proxmox-Zugang) — abgeschlossen
 - ✅ Phase 2 – VMs via OpenTofu + cloud-init (Debian-Image, VM-Modul, 5-Node-Cluster) — abgeschlossen
-- 🔄 Phase 3 – k3s-Cluster — in Arbeit (Node-Prep + Guest-Agent erledigt; k3s-Install als Nächstes)
+- 🔄 Phase 3 – k3s-Cluster — in Arbeit (Basis-Cluster aus 3 Servern + 2 Agents läuft und verifiziert; kube-vip als HA-API-VIP noch offen, siehe Nachtrag)
 - Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager)
 - Phase 5 – GitOps (ArgoCD/Flux)
 - Phase 6 – CI/CD-Pipeline
@@ -30,17 +30,28 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   cloud-init) – im Lockfile gepinnt
 - VM-Basis-Image: Debian 13 „Trixie" genericcloud, via `download_file` nach
   Datastore `local` gezogen; VM-Disks auf ZFS `lab`
+- `on_boot = false` für alle 5 k3s-Nodes (`infra/modules/vm/`, Modul-Default) –
+  kein Autostart bei Proxmox-Host-Reboot, bewusst gegen Dauerlast im
+  Lern-/Portfolio-Betrieb (Umschaltmechanismus analog zu `agent_enabled`,
+  falls später Dauerbetrieb gewünscht)
 - k3s-Nodes (statisch via cloud-init, in Phase 2 provisioniert):
-  - `192.168.0.160`–`162`: Server-Nodes (embedded etcd, HA)
-  - `192.168.0.163`–`164`: Agent-Nodes
-  - `192.168.0.170`: kube-vip (API-Server-VIP, Phase 3)
+  - `192.168.0.160`–`162`: Server-Nodes (embedded etcd, HA) – **läuft**
+  - `192.168.0.163`–`164`: Agent-Nodes – **läuft**
+  - `192.168.0.170`: kube-vip (API-Server-VIP) – **noch nicht aktiv**, siehe
+    Nachtrag unten
   - `192.168.0.165`–`169`: Reserve
   - Begründung/Trade-off: siehe ADR-0008
+- k3s-Version: `v1.36.3+k3s1` (aktuellster Stable, Kubernetes 1.36.3,
+  etcd 3.6.14 – Downgrade-Einbahnstraße für spätere Upgrades bewusst
+  akzeptiert, siehe Entscheidungsverlauf im Chat vom 2026-08-26)
+- Cluster-Join-Token: `K3S_TOKEN` in `secrets.sops.yaml`, vorab selbst
+  generiert (`openssl rand -hex 32`), nicht von k3s auto-generiert –
+  Ansible zieht ihn per `lookup('env', 'K3S_TOKEN')`
 - cloud-init-User auf den Nodes: `ops` (NOPASSWD-sudo)
 - Arbeitsverzeichnis Tofu: `infra/live/homelab/`
 - Arbeitsverzeichnis Ansible: `bootstrap/`
 - Tooling gepinnt via mise (OpenTofu 1.12.6; Sops 3.13.3; age 1.3.1;
-  Ansible 14.3.1; pipx 1.16.7). kubectl folgt zu Beginn des k3s-Installs.
+  Ansible 14.3.1; pipx 1.16.7; **kubectl 1.36.3**, passend zur k3s-Version)
 
 ## Erledigt (Phase 1, Schritte 1–5)
 - Git-Fundament: öffentliches GitHub-Repo, gitleaks + Push Protection
@@ -71,8 +82,9 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   Runbook fortgeschrieben
 - `.gitignore` gehärtet: modul-lokale `.terraform.lock.hcl` ignoriert, die
   Root-Lockfile bleibt bewusst versioniert (Provider-Pinning, ADR-0004)
+- `on_boot = false` als Modul-Default ergänzt (siehe Umgebung oben)
 
-## Erledigt (Phase 3 – bisher)
+## Erledigt (Phase 3)
 - Ansible-Tooling gepinnt: `ansible` 14.3.1 (pipx-Backend, `--include-deps`)
   + `pipx` 1.16.7 (aqua) in `mise.toml`. Pin-Politik als ADR-0004-Nachtrag
   festgehalten: ergebnis-bestimmende Tools exakt pinnen, Komfort-Tools
@@ -94,39 +106,82 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   (`reboot_after_update`). Agent aktiv, Proxmox meldet die Node-IPs. Zweistufiger
   Bring-up dokumentiert im ADR-0009-Nachtrag (belegt via dpkg.log: das
   genericcloud-Image bringt qemu-guest-agent nicht mit)
+- k3s-Version festgelegt: `v1.36.3+k3s1`; kubectl 1.36.3 passend via mise gepinnt
+- Cluster-Token vorab generiert (`openssl rand -hex 32`) statt k3s-auto-generiert
+  – reproduzierbar, kein Rückkanal von Server-1 nötig
+- Ansible-Rollenstruktur: `k3s_server` (cluster-init auf srv-1 via
+  `k3s_primary`-Flag in `hosts.yml`, Join für srv-2/3) + `k3s_agent` (Join
+  gegen Server-1) – zwei Rollen statt drei, da sich die Server-Varianten fast
+  alle Tasks teilen
+- `site.yml`: 4 Plays (prep → srv-1 → restliche Server → Agents); Server-1
+  bewusst als eigener Play (nicht `serial`), um unterschiedliche Rollen-Zweige
+  sauber zu trennen
+- **Basis-Cluster live verifiziert:** 3 Server (`control-plane,etcd`) + 2
+  Agents, alle `Ready`, `v1.36.3+k3s1`, korrekte IPs
 
-## Nächster Schritt (Phase 3 – k3s-Install)
-Entscheidungen zuerst, dann Befehle:
-- k3s-Version festlegen und pinnen (aktuelle stable prüfen)
-- kubectl in `mise.toml` pinnen (Version-Skew zur k3s-Version)
-- erster Server mit `--cluster-init` (embedded etcd), dann Server 2/3 + Agents
-- Cluster-Token als SOPS-Secret
-- kube-vip als API-Server-VIP (`192.168.0.170`, ARP-Modus)
-- eigenes Ansible-Playbook (Weg A) → am Ende ADR-0010 (Config-Management)
+### Nachtrag (2026-08-26): kube-vip als Boot-Zeit-Manifest gescheitert
+
+Erster Versuch: kube-vip-RBAC + DaemonSet-Manifest vor `--cluster-init` nach
+`/var/lib/rancher/k3s/server/manifests/` kopiert (offizielles k3s+kube-vip-
+Muster, DaemonSet statt kubeadm-Static-Pod). Ergebnis: Nach einigen Stunden
+Laufzeit verlor `srv-1` intermittierend seine **eigene** IPv4-Adresse (nicht
+nur die VIP) – Cluster über IPv4 unerreichbar, K8s-API antwortete zeitweise
+gar nicht mehr (`ServiceUnavailable`). Ursache nicht abschließend verifiziert
+(Verdacht: `hostNetwork: true` + `NET_ADMIN`-Capability des kube-vip-Pods in
+Kombination mit dynamischer Interface-Erkennung), aber reproduzierbar mit dem
+Boot-Zeit-Manifest, verschwunden nach komplettem Neuaufbau ohne kube-vip
+(30+ min stabile IPv4/SSH-Verbindung bestätigt).
+
+**Entscheidung:** kube-vip wird nicht mehr als Boot-Zeit-Manifest installiert,
+sondern nachträglich per `kubectl apply` gegen den laufenden Cluster –
+beobachtbar, mit Pod-Status/Logs live statt unsichtbar beim ersten Boot.
+`--tls-san` muss dafür nachträglich per `/etc/rancher/k3s/config.yaml` +
+Rolling-Restart (`serial: 1`, ein Server nach dem anderen wegen etcd-Quorum)
+auf allen 3 Servern ergänzt werden. **Noch nicht umgesetzt** – nächster Schritt.
+
+**Recovery-Weg, der funktioniert hat:** `tofu destroy` + `tofu apply -var
+agent_enabled=false` (VM-Neubau, State/Secrets/Code unberührt) → `k3s_server`-
+Rolle um kube-vip-Tasks und `--tls-san` bereinigt → `ansible-playbook site.yml`
+→ `tofu apply` (Guest-Agent-Kanal reaktivieren).
+
+## Nächster Schritt (Phase 3 – kube-vip nachrüsten)
+- `tls-san`-Config (`/etc/rancher/k3s/config.yaml`) + Rolling-Restart auf
+  allen 3 Servern (VIP `192.168.0.170` ins API-Server-Zertifikat)
+- kube-vip RBAC + DaemonSet per `kubectl apply` (nicht mehr Boot-Zeit-Manifest),
+  Version `v1.2.0`, Modi `--controlplane --services` (Services-LB schon mit
+  aktiviert, auch wenn `cluster/` noch leer ist – ohne IP-Pool passiert bis
+  Phase 4 nichts)
+- Verifikation: VIP erreichbar, IPv4-Stabilität über längeren Zeitraum
+  beobachten (Lehre aus dem gescheiterten ersten Versuch)
+- Danach: ADR-0010 (Config-Management/k3s-Bootstrap-Entscheidungen
+  dokumentieren, inkl. kube-vip-Lessons-Learned: Boot-Zeit-Manifest vs.
+  nachträglicher `kubectl apply`)
 
 ## Repo-Struktur
 
     .
     ├── docs/
-    │   ├── adr/           # Architektur-Entscheidungen (0001–0009)
+    │   ├── adr/           # Architektur-Entscheidungen (0001–0009, 0010 offen)
     │   ├── runbooks/      # Betrieb/Reproduktion laufender Systeme
     │   └── STATUS.md      # dieser Kontext-Anker
     ├── infra/             # OpenTofu
     │   ├── modules/
-    │   │   └── vm/        # wiederverwendbares VM-Modul
+    │   │   └── vm/        # wiederverwendbares VM-Modul (inkl. on_boot)
     │   │                  #   (main/variables/outputs/versions.tf)
     │   └── live/homelab/  # konkrete Umgebung: backend.tf, encryption.tf,
     │                      #   variables.tf, provider.tf, image.tf,
     │                      #   k3s-nodes.tf, secrets.sops.yaml (verschlüsselt)
     ├── bootstrap/         # k3s-Installation via Ansible
     │   ├── ansible.cfg
-    │   ├── inventory/hosts.yml
-    │   ├── group_vars/    # all.yml (Platzhalter, füllt sich im k3s-Install)
+    │   ├── inventory/hosts.yml       # k3s_primary-Flag bei srv-1
+    │   ├── group_vars/all.yml        # k3s_token, k3s_version
     │   ├── roles/
-    │   │   └── prep/      # Node-Vorbereitung (Phase 3a)
-    │   └── site.yml       # Haupt-Playbook
+    │   │   ├── prep/                 # Node-Vorbereitung (Phase 3a)
+    │   │   ├── k3s_server/           # cluster-init / Join (Server)
+    │   │   └── k3s_agent/            # Join (Agent)
+    │   └── site.yml                  # Haupt-Playbook, 4 Plays
     ├── cluster/           # k8s-/GitOps-Manifeste (Phase 5, noch leer)
-    ├── mise.toml          # Tool-Versionen gepinnt
+    ├── mise.toml          # Tool-Versionen gepinnt (inkl. kubectl 1.36.3)
     ├── .sops.yaml         # SOPS-Regeln (öffentl. age-Key)
     └── .pre-commit-config.yaml
 
@@ -166,11 +221,13 @@ Entscheidungen zuerst, dann Befehle:
   **Aufwand:** ~5–7 Std. inkl. eigenem ADR.
 
 - **ADR-0010 (geplant):** Config-Management mit Ansible (eigenes Playbook,
-  Werkzeug-Grenze Tofu/Ansible) – schreiben, wenn der k3s-Install steht.
+  Werkzeug-Grenze Tofu/Ansible, kube-vip Boot-Zeit-Manifest vs. nachträglicher
+  Apply) – schreiben, sobald kube-vip nachgerüstet und verifiziert ist.
 
 ## Kontext / Details
 - Entscheidungen: `docs/adr/0001`–`0009` (0002 ersetzt durch 0006;
   0004 + 0009 mit Nachträgen vom 2026-08-25; 0009 = VM-Provisioning:
-  Cloud-Image-Import + natives cloud-init)
+  Cloud-Image-Import + natives cloud-init); 0010 offen (Config-Management,
+  siehe „Offen" oben)
 - Betrieb State-Backend: `docs/runbooks/state-backend-rustfs.md`
 - Proxmox-Zugang: `docs/runbooks/proxmox-access.md`

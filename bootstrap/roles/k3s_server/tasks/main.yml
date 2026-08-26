@@ -1,4 +1,12 @@
 ---
+- name: Verzeichnis /etc/rancher/k3s sicherstellen
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: k3s-Server-Config (tls-san für kube-vip-VIP) bereitstellen
   ansible.builtin.template:
     src: config.yaml.j2

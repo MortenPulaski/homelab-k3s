@@ -6,11 +6,11 @@ data "local_file" "ssh_pub" {
 
 locals {
   nodes = {
-    "k3s-server-1" = { vm_id = 160, ip = "192.168.0.160/24" }
-    "k3s-server-2" = { vm_id = 161, ip = "192.168.0.161/24" }
-    "k3s-server-3" = { vm_id = 162, ip = "192.168.0.162/24" }
-    "k3s-agent-1"  = { vm_id = 163, ip = "192.168.0.163/24" }
-    "k3s-agent-2"  = { vm_id = 164, ip = "192.168.0.164/24" }
+    "k3s-server-1" = { vm_id = 160, ip = "192.168.0.160/24", startup_order = 1, startup_up_delay = 30 }
+    "k3s-server-2" = { vm_id = 161, ip = "192.168.0.161/24", startup_order = 1, startup_up_delay = 30 }
+    "k3s-server-3" = { vm_id = 162, ip = "192.168.0.162/24", startup_order = 1, startup_up_delay = 30 }
+    "k3s-agent-1"  = { vm_id = 163, ip = "192.168.0.163/24", startup_order = 2 }
+    "k3s-agent-2"  = { vm_id = 164, ip = "192.168.0.164/24", startup_order = 2 }
   }
 }
 
@@ -25,6 +25,9 @@ module "k3s_nodes" {
   image_id       = proxmox_download_file.debian13.id
   ssh_public_key = trimspace(data.local_file.ssh_pub.content)
   agent_enabled  = var.agent_enabled
+
+  startup_order    = each.value.startup_order
+  startup_up_delay = try(each.value.startup_up_delay, null)
 }
 
 # Sicherer State-Umzug: server-1 wechselt nur die Adresse, wird NICHT neu gebaut

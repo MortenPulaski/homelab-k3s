@@ -18,6 +18,18 @@ variable "on_boot" {
   default     = false
 }
 
+variable "startup_order" {
+  description = "Proxmox Start/Shutdown order (Priorität, aufsteigend gestartet, absteigend gestoppt)."
+  type        = number
+  default     = null
+}
+
+variable "startup_up_delay" {
+  description = "Sekunden Wartezeit, bevor die nächste Prioritätsstufe startet."
+  type        = number
+  default     = null
+}
+
 # von der Live-Ebene durchgereicht (Modul greift nicht selbst ins Dateisystem)
 variable "image_id" { type = string }
 variable "ssh_public_key" { type = string }

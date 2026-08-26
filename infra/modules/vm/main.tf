@@ -55,4 +55,12 @@ resource "proxmox_virtual_environment_vm" "this" {
   operating_system {
     type = "l26"
   }
+
+  dynamic "startup" {
+    for_each = var.startup_order != null ? [1] : []
+    content {
+      order    = var.startup_order
+      up_delay = var.startup_up_delay
+    }
+  }
 }

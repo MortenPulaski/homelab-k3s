@@ -160,7 +160,9 @@ Rolle um kube-vip-Tasks und `--tls-san` bereinigt → `ansible-playbook site.yml
 - **Proxmox Start/Shutdown-Reihenfolge jetzt via Tofu codifiziert**
   (`infra/modules/vm/`, neue optionale Variablen `startup_order` /
   `startup_up_delay`, `dynamic "startup"`-Block): Server-Nodes
-  `order = 1, up_delay = 30`, Agent-Nodes `order = 2`. Grund: Agents
+  `order = 1, up_delay = 10`, Agent-Nodes `order = 2`. Wert nach
+  Massenstart-Test per journalctl-Zeitstempel-Vergleich verifiziert
+  (Server registrieren sich untereinander deutlich innerhalb von 10s). Grund: Agents
   brauchen beim Boot einen erreichbaren API-Server; ohne definierte
   Reihenfolge (`any`, Proxmox-Default) starten alle 5 VMs beim
   UI-Massenstart parallel. Damit ist ein einzelner Massenstart aller

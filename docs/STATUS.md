@@ -251,7 +251,8 @@ Zeitpunkt schon, würde OpenTofu einen laufenden etcd-Cluster unkontrolliert
     │   ├── site.yml                  # Haupt-Playbook, Tags prep/k3s/kube-vip-restart
     │   └── shutdown.yml               # Kontrollierter Cluster-Shutdown
     ├── cluster/           # k8s-Manifeste
-    │   └── kube-vip/      # RBAC + DaemonSet (Phase 3, HA-API-VIP)
+    │   ├── kube-vip/      # RBAC + DaemonSet (Phase 3, HA-API-VIP)
+    │   └── cert-manager/  # HelmChart-CRD (Phase 4, TLS-Fundament)
     ├── mise.toml          # Tool-Versionen gepinnt (inkl. kubectl 1.36.3)
     ├── .sops.yaml         # SOPS-Regeln (öffentl. age-Key)
     └── .pre-commit-config.yaml

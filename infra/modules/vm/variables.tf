@@ -59,13 +59,13 @@ variable "gateway" {
   type    = string
   default = "192.168.0.1"
 }
-variable "dns_domain" {
-  type    = string
-  default = "marpal-it.de"
-}
 variable "dns_servers" {
   type    = list(string)
   default = ["192.168.0.145"]
+}
+variable "dns_domain" {
+  type    = string
+  default = " "
 }
 variable "username" {
   type    = string

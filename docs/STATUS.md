@@ -6,6 +6,7 @@
 - ✅ Phase 1 – Fundament & Setup (Git, Tooling, Secrets, State-Backend, Proxmox-Zugang) — abgeschlossen
 - ✅ Phase 2 – VMs via OpenTofu + cloud-init (Debian-Image, VM-Modul, 5-Node-Cluster) — abgeschlossen
 - ✅ Phase 3 – k3s-Cluster — abgeschlossen (Basis-Cluster aus 3 Servern + 2 Agents läuft und verifiziert; kube-vip als HA-API-VIP aktiv, Failover verifiziert; zwei Zwischen-Incidents dokumentiert in `docs/incidents/incidents.md`; ADR-0010 geschrieben)
+- 🔄 Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager) — gestartet: Ingress-Entscheidung (Traefik/Klipper beibehalten) + Deploy-Mechanismus (k3s HelmChart-CRD) getroffen, cert-manager installiert
 - Phase 4 – Workloads deklarativ (Helm, Ingress, cert-manager)
 - Phase 5 – GitOps (ArgoCD/Flux)
 - Phase 6 – CI/CD-Pipeline
@@ -174,6 +175,31 @@ selbst in der CLI – Schritte einzeln, Entscheidungen vor der Umsetzung erklär
   durchzuführen (siehe „Erledigt (Phase 3)" oben) – Massenstart nach
   Von-Null-Neubau und Reboot-Test liefen darüber.
 
+## Erledigt (Phase 4)
+
+- **Ingress-Entscheidung:** Traefik (k3s-Default, via Klipper/ServiceLB) bleibt bestehen – kein Wechsel zu ingress-nginx. Kein Wiederholungsrisiko zu INC-002: kube-vip ist seit `svc_enable: "false"` ausschließlich für die API-VIP zuständig, rührt keine `LoadBalancer`-Services mehr an; die offene Frage aus Phase 3 (Klipper vs. MetalLB vs. kube-vip `--services`) bleibt unverändert vertagt (siehe „Offen" unten).
+- **Deploy-Mechanismus für Workloads:** k3s HelmChart-CRD (`apiVersion: helm.cattle.io/v1`, `kind: HelmChart`) statt helm-CLI – konsistent mit der Werkzeuggrenze aus ADR-0010 (alles innerhalb der Kubernetes-API läuft über `kubectl apply`/CRs, kein zusätzliches externes Tool auf der Workstation). Kein neuer mise-Pin nötig.
+- **cert-manager installiert:** v1.21.1 via `cluster/cert-manager/helmchart.yaml` (HelmChart-CRD, `targetNamespace: cert-manager`, `crds.enabled: true`). Verifiziert: alle drei Pods (`cert-manager`, `cainjector`, `webhook`) `Running`, alle CRDs (`Certificate`, `Issuer`, `ClusterIssuer`, ACME `Challenge`/`Order`) vorhanden.
+- **TLS-Konzept festgelegt:** Wildcard-Zertifikat für `*.k3s.marpal-it.de` (ein `ClusterIssuer`, deckt alle künftigen Apps unter diesem Schema ab), DNS-01-Challenge über den DNS-Provider **netcup** via Community-Webhook (`cert-manager-webhook-netcup`, kein nativer cert-manager-Support für netcup). Bewusster Trade-off: Fremdabhängigkeit von einem Community-Repo (Einzelmaintainer) statt offiziellem Provider-Support.
+
+### Nachtrag (2026-08-27): DNS-Search-Domain-Bug in Pods (ndots + Split-Horizon-Wildcard)
+
+Beim ersten HelmChart-Install (cert-manager) schlug `helm repo add` mit `tls: unrecognized name` fehl. Root Cause: Kubernetes übernimmt automatisch die Search-Domain des Node-`/etc/resolv.conf` (`search marpal-it.de`, aus `dns_domain` in `infra/modules/vm/`) in jeden Pod. Bei `ndots:5` (Pod-Standard) probiert der Resolver externe Hostnamen mit weniger als 5 Punkten (z. B. `charts.jetstack.io`) zuerst mit angehängter Search-Domain (`charts.jetstack.io.marpal-it.de`) – und AdGuards Wildcard-Rewrite (`*.marpal-it.de → 192.168.0.118`, NPM) fängt genau diesen Fehlversuch ab, bevor der Resolver den korrekten, absoluten Namen probiert.
+
+**Provider-Eigenheit (`bpg/proxmox`, bekannter Bug, Issue [#2011](https://github.com/bpg/terraform-provider-proxmox/issues/2011)):** Weder `domain = null` noch das komplette Weglassen des Attributs löschen das Feld tatsächlich in Proxmox – der Provider behandelt es als „nicht verwaltet", nicht als „leeren". Ohne explizites Attribut fällt Proxmox auf die **Node-Default-Domain** zurück (bei uns `fritz.box`, vom Router per DHCP an `pve2` vergeben), nicht auf leer. Der einzige Wert, der bei der Proxmox-API tatsächlich als „leer" ankommt, ist ein **Leerzeichen** (`" "`), kein echter Leerstring (`""`). Verifiziert per `qm config <vmid> | grep search` und `tofu plan` (`No changes` erst nach `default = " "`).
+
+**Endgültiger Code-Stand** (`infra/modules/vm/variables.tf`):
+```hcl
+variable "dns_domain" {
+  type    = string
+  default = " "  # bewusst ein Leerzeichen, kein leerer String – Workaround für bpg/proxmox #2011
+}
+```
+
+**Betroffen:** alle 5 Nodes, nachträglich per `qm set <vmid> --searchdomain ''` + `qm cloudinit update <vmid>` + `cloud-init clean --logs && reboot` gefixt (Server-Nodes seriell, Quorum währenddessen verifiziert per `kubectl get nodes` + kube-vip-Pod-Status). Bei einem Von-Null-Neubau greift jetzt der Code-Fix automatisch (`tofu plan` bestätigt `No changes` gegen den aktuellen Proxmox-Zustand).
+
+**Nebenbefund:** `cloud-init clean` erzeugt beim nächsten Boot neue SSH-Host-Keys (cloud-init behandelt sie wie andere einmalig generierte Artefakte) – SSH meldet dann berechtigt eine Host-Key-Warnung; alten Eintrag per `ssh-keygen -R <ip>` entfernen.
+
 ## Reproduzierbarer Node-Bring-up (Neuaufbau von Null)
 
 Der Recovery-Weg lief zunächst nur, weil die Befehle manuell in der
@@ -231,6 +257,13 @@ Zeitpunkt schon, würde OpenTofu einen laufenden etcd-Cluster unkontrolliert
     └── .pre-commit-config.yaml
 
 ## Offen
+
+- **cert-manager DNS-01 / netcup-Webhook (Phase 4, in Arbeit):** netcup-API-Zugangsdaten
+  (Kundennummer, API-Key, API-Passwort) aus dem CCP besorgen und in den Cluster bringen
+  (Kubernetes-Secret im `cert-manager`-Namespace – Ablageweg SOPS+`kubectl` vs. direktes
+  `kubectl create secret` noch zu entscheiden), `cert-manager-webhook-netcup`
+  per HelmChart-CRD installieren, `ClusterIssuer` für `*.k3s.marpal-it.de`
+  (DNS-01) anlegen, mit einer Test-App verifizieren.
 
 - **Foundation-Projekt (Backlog):** RustFS-LXC + Proxmox-Zugang
   (`tofu@pve`) als eigenes, getrenntes Tofu-Projekt `foundation/` codifizieren

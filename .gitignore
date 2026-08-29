@@ -14,12 +14,17 @@ override.tf.json
 *_override.tf
 *_override.tf.json
 
+# Plan-Dateien: enthalten ALLE Variablenwerte im Klartext – inklusive der
+# Secrets, die mise via `_.file = secrets.sops.yaml` als Env injiziert.
+*.tfplan
+tfplan
+plan.out
+
 # === Secrets - NIEMALS committen ==============================================
 # tfvars mit Werten (nur *.example wird eingecheckt)
 *.tfvars
+*.tfvars.json
 !*.tfvars.example
-*.auto.tfvars
-secrets.auto.tfvars
 
 # SOPS: die ENTSCHLUESSELTEN Klartext-Dateien (die *.enc.* / *.sops.* bleiben drin)
 *.dec
@@ -27,10 +32,13 @@ secrets.auto.tfvars
 *.plaintext
 
 # age / SSH private keys
+# key*.txt deckt keys.txt ab (SOPS-Standardpfad), age*.txt die mise-Variante
 *.agekey
-age.key
-key.txt
+*.age
+key*.txt
+age*.txt
 *.pem
+*.key
 id_rsa
 id_ed25519
 
@@ -38,6 +46,11 @@ id_ed25519
 kubeconfig
 *.kubeconfig
 .kube/
+
+# lokale Env-Overrides (mise.local.toml, direnv, ...)
+.env
+.envrc
+*.local.toml
 
 # === Kram =====================================================================
 .DS_Store
